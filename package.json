@@ -8,9 +8,7 @@
     "dist": "electron-builder",
     "postinstall": "electron-builder install-app-deps",
     "test": "node --no-warnings test/phase6.test.js && node --no-warnings test/phase7.test.js && node --no-warnings test/phase8.test.js && node --no-warnings test/phase10-deep.test.js && node --no-warnings test/qrmenu.test.js && node --no-warnings test/ui-smoke.test.js && node --no-warnings test/ui-inventory.test.js && node --no-warnings test/ui-crm.test.js && node --no-warnings test/ui-reports-deep.test.js && node --no-warnings test/ui-dashboard.test.js && node --no-warnings test/phase11-delivery.test.js && node --no-warnings test/ui-delivery.test.js && node --no-warnings test/phase12-floor.test.js && node --no-warnings test/ui-floor.test.js && node --no-warnings test/ui-qrmenu.test.js && node --no-warnings test/phase13-design.test.js && node --no-warnings test/waiter-api.test.js && node --no-warnings test/waiter-tls.test.js",
-    "test:dom": "node --no-warnings test/ui-design.dom.test.js",
-    "preview": "node preview/server.js",
-    "preview:mobile": "node preview/mobile/build.js"
+    "test:dom": "node --no-warnings test/ui-design.dom.test.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",
