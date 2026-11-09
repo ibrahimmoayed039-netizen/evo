@@ -1,0 +1,79 @@
+/* Theme from design/*.dc.html — colors, type, sizes. Overrides the base styles in index.html. */
+:root{--bg:#EEF1F0;--ink:#14202B;--ink2:#0E1A24;--pri:#0F766E;--pri-d:#0B5E57;--pri-l:#E3F2EF;--bd:#BCC8C4;--bd2:#D3DBD8;--mu:#5B6B75;--sbt:#C9D4DB;
+ --ok:#15803D;--ok-bg:#EFFAF2;--bad:#B91C1C;--bad-bg:#FDF1F1;--warn:#B45309;--warn-bg:#FFF6E3;--warn-ink:#78350F;--info:#1D4ED8;--info-bg:#EEF3FF}
+body{font-family:Cairo,Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+.card,.stat,.dbk,.dvc,.qc{border-radius:12px;box-shadow:0 1px 2px #14202B22}
+select,input{border:1px solid var(--bd);border-radius:10px;min-height:42px;background:#fff;color:var(--ink)}
+button{background:var(--pri);border-radius:10px;min-height:44px;font-weight:700}
+button:hover{background:var(--pri-d)}
+button.sec{background:#fff;color:var(--ink);border:1px solid var(--bd)}button.sec:hover{background:var(--bg)}
+button.danger{background:var(--bad)}button.sm{min-height:34px}
+.err{color:var(--bad)}.ok{color:var(--ok)}.so{color:var(--bad)}.muted,.muted-l{color:var(--mu)}
+/* shell */
+nav{width:196px;background:var(--ink);padding:16px 12px;gap:4px}
+nav::before{content:"Restaurant POS";color:#fff;font-size:18px;font-weight:700;padding:4px 10px 16px;display:block}
+nav button{color:var(--sbt);border-radius:8px;min-height:42px;font-weight:400;padding:0 12px}
+nav button:hover{background:#ffffff14}
+nav button.on{background:var(--pri);color:#fff;font-weight:700}
+nav .who{color:var(--sbt);padding:0 10px}
+#content{max-width:none;padding:20px 24px}
+h2{font-size:22px;margin:0 0 10px}
+th{color:var(--mu);font-weight:600;background:#F7F9F8}th,td{border-bottom:1px solid var(--bd2)}
+/* login/setup split */
+#login,#setup{background:var(--bg)}
+#login{display:flex;align-items:stretch;justify-content:stretch;height:100vh;min-height:100vh}
+#login .brand{flex:1.1;background:var(--ink);color:#fff;padding:64px;display:flex;flex-direction:column;justify-content:flex-end;gap:12px}
+#login .brand b{font-size:54px;line-height:1.2}#login .brand span{color:var(--sbt);font-size:18px}
+#login .login-side{flex:1;display:flex;align-items:center;justify-content:center}
+#login .card{box-shadow:none;background:none;padding:0}
+.users button{background:#fff;color:var(--ink);border:1px solid var(--bd);border-radius:12px}
+.users button:hover,.users button.on{background:var(--pri-l);border-color:var(--pri)}
+.pad button{height:64px;font-size:22px;background:#fff;color:var(--ink);border:1px solid var(--bd);border-radius:12px}
+.pad button:hover{background:var(--pri-l)}
+.dots{font-size:32px;letter-spacing:14px}
+/* chips / tabs / categories */
+.tabs button,.cats button,.seg button{background:#fff;color:var(--ink);border:1px solid var(--bd2);border-radius:20px}
+.tabs button.on,.cats button.on,.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* POS */
+.tile{background:#fff;color:var(--ink);border:1px solid var(--bd2);border-radius:12px}.tile small{color:var(--pri)}
+.tile:hover{background:var(--pri-l);border-color:var(--pri)}
+.lnk{color:var(--pri)}.acts #pPay{background:var(--pri)}.acts #pPay:hover{background:var(--pri-d)}
+/* floor */
+.floor{background:#F7F9F8;border:1px solid var(--bd2);border-radius:12px}.floor.editing{outline-color:var(--pri)}
+.tbl{border:2px solid var(--ok);background:var(--ok-bg);border-radius:14px;color:var(--ink)}
+.tbl.busy{border-color:var(--bad);background:var(--bad-bg)}
+.tbl.bill{border-color:var(--warn);background:var(--warn-bg);color:var(--warn-ink)}
+.tbl.rsv{border-style:dashed;border-color:var(--info);background:var(--info-bg)}
+.tbl small{color:var(--mu)}.tbl .rv{color:var(--info)}.tbl .bl{color:var(--warn)}
+.dot.free{background:var(--ok)}.dot.busy{background:var(--bad)}.dot.bill{background:var(--warn)}.dot.rsv{background:var(--info)}
+/* KDS */
+.kt{border:2px solid var(--bd2);border-radius:12px}.kt.new{border-color:var(--info)}
+.kt.preparing{border-color:var(--warn);background:var(--warn-bg)}.kt.ready{border-color:var(--ok);background:var(--ok-bg)}
+.kt.cancelled{border-color:var(--bad);background:var(--bad-bg)}.kt.warn .tm{color:var(--warn)}.kt.late .tm{color:var(--bad)}
+/* delivery */
+.dvcol{background:#E3EAE7;border-radius:12px}
+.dvcol.preparing>h3{color:#92400E}.dvcol.on_the_way>h3{color:var(--info)}.dvcol.delivered>h3{color:var(--ok)}
+.dvc.preparing{border-inline-start-color:var(--warn)}.dvc.on_the_way{border-inline-start-color:var(--info)}.dvc.delivered{border-inline-start-color:var(--ok)}
+.dvc.owed{background:var(--bad-bg)}
+/* dashboard / reports */
+.dbk.main{border-inline-start-color:var(--pri);background:linear-gradient(135deg,var(--pri-l),#fff)}.dbk.main b{color:var(--pri)}
+.dbd.up{color:var(--ok)}.dbd.down{color:var(--bad)}
+.dbi-n{background:var(--pri-l);color:var(--pri)}.dbh-c i{background:#7DB7B0}.dbh-c.pk i{background:var(--warn)}
+.dbpk{background:var(--warn-bg);color:var(--warn-ink)}
+.bar{background:var(--pri-l)}.bar i{background:var(--pri)}.stat.good b{color:var(--ok)}.stat.bad b,.stat b.bad{color:var(--bad)}
+/* badges */
+.badge{background:#E3EAE7}.badge.booked{background:var(--info-bg);color:var(--info)}.badge.seated,.badge.paid{background:#DDF3E4;color:#14532D}
+.badge.cancelled,.badge.no_show,.badge.unpaid{background:var(--bad-bg);color:var(--bad)}
+.rcard.seated{border-inline-start-color:var(--ok)}
+.toast{background:var(--ink2)}
+dialog{border-radius:12px}
+
+/* menu admin */
+.grip{cursor:grab;color:var(--mu);font-size:18px;width:28px;text-align:center}
+.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:8px}
+.vbox{border:1px dashed var(--bd);border-radius:10px;padding:10px;margin:8px 0}.vt input{min-height:34px;padding:4px 8px}.vt input[type=radio],.vt input[type=checkbox]{width:auto;min-height:0}
+/* form controls: checkboxes/radios/color should not inherit the tall text-input style */
+input[type=checkbox],input[type=radio]{min-height:0;height:auto;width:auto;padding:0;accent-color:var(--pri)}
+input[type=color]{width:72px;min-height:42px;padding:2px;cursor:pointer}
+.chk{display:flex;align-items:center;gap:8px;min-height:0;margin:6px 0}
+fieldset{border:1px solid var(--bd2);border-radius:10px;margin:8px 0}fieldset .chk{margin:4px 0}
