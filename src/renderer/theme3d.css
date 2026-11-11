@@ -1,0 +1,151 @@
+/* =====================================================================
+   طبقة المجسمات (3D layer) — تُحمَّل بعد theme.css وتعتمد على متغيراته.
+   لا تغيّر أي سلوك: كل شيء هنا مظهر فقط. لتعطيل كل المجسمات احذف سطر
+   <link href="theme3d.css"> من index.html.
+   الفكرة: كل عنصر له «سماكة» (ظل صلب متدرّج) + «ظل أرضي» + «لمعة» علوية،
+   والضوء دائماً من أعلى اليسار، فتبدو العناصر كأنها على نفس الطاولة.
+   ===================================================================== */
+:root{
+  --gnd:0 22px 18px -10px rgba(14,26,36,.45);
+  --lift:0 14px 24px -10px rgba(14,26,36,.38);
+}
+
+/* ---------------------------------------------------------------------
+   1) شاشة الدخول: مشهد إيزومتري (طاولة + كراسي + مصباح)
+   --------------------------------------------------------------------- */
+#login .brand{position:relative;overflow:hidden}
+#login .brand .scene{position:absolute;inset-inline:-4%;top:2%;height:64%;background:url(art/hero-scene.svg) 50% 60%/contain no-repeat;
+  filter:drop-shadow(0 30px 30px rgba(0,0,0,.35));animation:scene-float 8s ease-in-out infinite;pointer-events:none}
+#login .brand b,#login .brand span{position:relative}
+@keyframes scene-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+/* ---------------------------------------------------------------------
+   2) الطاولات: أرضية + طاولات بسماكة + كراسي بمسند
+   --------------------------------------------------------------------- */
+.floor{border:1px solid #B7C5C0;
+  background:
+    radial-gradient(760px 300px at 50% -40px,rgba(255,255,255,.85),transparent 70%),
+    repeating-linear-gradient(90deg,rgba(14,26,36,.05) 0 1px,transparent 1px 88px),
+    repeating-linear-gradient(0deg,rgba(14,26,36,.05) 0 1px,transparent 1px 88px),
+    linear-gradient(160deg,#EDF3F1,#D9E5E1);
+  box-shadow:inset 0 16px 26px -16px rgba(14,26,36,.4),inset 0 -2px 0 #fff,0 14px 26px -14px rgba(14,26,36,.4)}
+/* الجدار الخلفي */
+.floor::before{content:"";position:absolute;inset:0 0 auto 0;height:20px;pointer-events:none;
+  background:linear-gradient(180deg,#1A2A38,#2A4254);box-shadow:0 5px 10px -2px rgba(14,26,36,.35)}
+.floor.editing{background-color:#E6EFEC}
+
+.floor .tbl{
+  --top1:#F7FCFA;--top2:#D3EAE2;--side:#93BDB1;--sided:#6E9A8E;
+  --chA:#C7EADF;--chB:#8DCDBD;--chD:#5FA392;--ring:inset 0 0 0 2px rgba(255,255,255,.6);
+  --stk:0 2px 0 var(--side),0 4px 0 var(--side),0 6px 0 var(--side),0 8px 0 var(--sided);
+  border:0;color:var(--ink);
+  background:linear-gradient(145deg,var(--top1),var(--top2));
+  box-shadow:var(--stk),var(--gnd),var(--ring),inset 0 -10px 16px -10px rgba(14,26,36,.2);
+  transition:transform .16s var(--ease),box-shadow .16s var(--ease);
+}
+.floor .tbl.busy{--top1:#FFF3F1;--top2:#F6CDC8;--side:#D58E86;--sided:#B2675F;--chA:#F8D0CB;--chB:#E89E96;--chD:#BB6760}
+.floor .tbl.bill{--top1:#FFF8E6;--top2:#FBDD9C;--side:#DDA94B;--sided:#B98526;--chA:#FDE5AE;--chB:#F5BB5B;--chD:#C98A27;color:var(--warn-ink);animation:tpulse3d 2s infinite}
+.floor .tbl.rsv{--ring:inset 0 0 0 3px var(--info),inset 0 0 0 6px rgba(255,255,255,.75);border-style:solid}
+.floor .tbl:hover{transform:translate(-50%,calc(-50% - 3px));box-shadow:var(--stk),0 30px 22px -10px rgba(14,26,36,.4),var(--ring),inset 0 -10px 16px -10px rgba(14,26,36,.2)}
+.floor .tbl:active{transform:translate(-50%,calc(-50% + 2px))}
+.floor.editing .tbl{outline:2px dashed rgba(15,118,110,.55);outline-offset:4px}
+@keyframes tpulse3d{
+  0%,100%{box-shadow:var(--stk),var(--gnd),var(--ring),0 0 0 0 rgba(217,119,6,.45)}
+  50%{box-shadow:var(--stk),var(--gnd),var(--ring),0 0 0 11px rgba(217,119,6,0)}}
+/* لمعة سطح الطاولة */
+.floor .tbl::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.5) 0,rgba(255,255,255,0) 44%)}
+.floor .tbl b{font-size:16px;font-weight:800;position:relative}
+.floor .tbl span,.floor .tbl small{position:relative}
+
+/* الكراسي: مقعد + مسند يدور حسب موضع الكرسي (--a يُحسب في tables.js) */
+.floor .tbl .ch{width:17px;height:17px;border-radius:0;background:none;transform:translate(-50%,-50%);
+  filter:drop-shadow(0 6px 3px rgba(14,26,36,.3));pointer-events:none}
+.floor .tbl .ch::before{content:"";position:absolute;inset:0;border-radius:6px;
+  background:linear-gradient(145deg,var(--chA),var(--chB));box-shadow:0 3px 0 var(--chD),inset 0 1px 0 rgba(255,255,255,.7)}
+.floor .tbl .ch::after{content:"";position:absolute;left:50%;top:50%;width:5px;height:20px;border-radius:3px;
+  background:linear-gradient(90deg,var(--chB),var(--chD));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 0 var(--chD);
+  transform:translate(-50%,-50%) rotate(var(--a,0deg)) translateX(11.5px)}
+
+/* مفتاح الألوان: خرز لامع */
+.legend .dot{width:12px;height:12px;vertical-align:-1px;box-shadow:inset 0 -2px 3px rgba(0,0,0,.28),0 1px 2px rgba(14,26,36,.35)}
+.legend .dot.free{background:radial-gradient(circle at 35% 30%,#9BE6B2,var(--ok) 62%)}
+.legend .dot.busy{background:radial-gradient(circle at 35% 30%,#F8A5A5,var(--bad) 62%)}
+.legend .dot.bill{background:radial-gradient(circle at 35% 30%,#FCD58A,var(--warn) 62%)}
+.legend .dot.rsv{background:radial-gradient(circle at 35% 30%,#9DB8FF,var(--info) 62%)}
+
+/* ---------------------------------------------------------------------
+   3) لوحة التحكم: أعمدة منشورية + أيقونات مجسمة + ميداليات
+   --------------------------------------------------------------------- */
+.dbks{grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+.dbk{position:relative;overflow:hidden;min-height:134px;padding-inline-end:132px;
+  box-shadow:var(--e2),inset 0 1px 0 #fff;border-inline-start-width:6px}
+.dbk::after{content:"";position:absolute;inset-inline-end:14px;bottom:10px;width:108px;height:108px;pointer-events:none;
+  background:50% 50%/contain no-repeat;filter:drop-shadow(0 12px 8px rgba(14,26,36,.25));transition:transform .28s var(--ease)}
+.dbk.art-coins::after{background-image:url(art/coins.svg)}
+.dbk.art-boxes::after{background-image:url(art/boxes.svg)}
+.dbk.art-receipt::after{background-image:url(art/receipt.svg)}
+.dbk:hover::after{transform:translateY(-5px) rotate(-3deg)}
+
+.dbh{gap:11px;padding-inline-end:8px;margin-top:18px}
+.dbh-c span{margin-bottom:9px}
+.dbh-c i{position:relative;border-radius:2px 2px 0 0;box-shadow:0 10px 10px -6px rgba(14,26,36,.35);
+  background:linear-gradient(90deg,#46BDB2,#0F766E)}
+.dbh-c i::before{content:"";position:absolute;left:0;bottom:100%;width:100%;height:7px;background:#9CE6DE;transform:skewX(-45deg);transform-origin:bottom left}
+.dbh-c i::after{content:"";position:absolute;left:100%;top:0;width:7px;height:100%;background:#0A5A54;transform:skewY(-45deg);transform-origin:top left}
+.dbh-c.pk i{background:linear-gradient(90deg,#FBC35A,#D97706)}
+.dbh-c.pk i::before{background:#FDE3A6}.dbh-c.pk i::after{background:#9A5206}
+
+.bar{height:16px;border-radius:999px;background:linear-gradient(180deg,rgba(14,26,36,.1),rgba(255,255,255,.6));box-shadow:inset 0 2px 3px rgba(14,26,36,.2)}
+.bar i{border-radius:999px;background:linear-gradient(180deg,#63D6CB 0,#0F766E 55%,#0B5E57 100%);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.45),0 2px 5px rgba(11,94,87,.45)}
+
+.dbi-n{width:28px;height:28px;box-shadow:inset 0 -2px 3px rgba(0,0,0,.18),0 3px 5px -1px rgba(14,26,36,.35)}
+.dbi-r:nth-child(1) .dbi-n{background:radial-gradient(circle at 35% 28%,#FFF1BE,#E5AA2A 70%);color:#6B4300}
+.dbi-r:nth-child(2) .dbi-n{background:radial-gradient(circle at 35% 28%,#FFFFFF,#AEBBC4 70%);color:#33434E}
+.dbi-r:nth-child(3) .dbi-n{background:radial-gradient(circle at 35% 28%,#FFE0C2,#C98A55 70%);color:#5C3411}
+
+/* ---------------------------------------------------------------------
+   4) الكاشير: أصناف كأطباق على بلاطات بشريط لون التصنيف
+   --------------------------------------------------------------------- */
+.tile{position:relative;overflow:hidden;padding-top:18px;gap:8px;
+  box-shadow:inset 0 1px 0 #fff,0 3px 0 var(--bd2),0 12px 16px -10px rgba(14,26,36,.4)}
+.tile::before{content:"";position:absolute;inset:0 0 auto 0;height:6px;background:linear-gradient(90deg,var(--cc,var(--pri)),color-mix(in srgb,var(--cc,var(--pri)) 65%,#fff))}
+.tile:hover{box-shadow:inset 0 1px 0 #fff,0 3px 0 var(--pri),0 20px 22px -10px rgba(14,26,36,.45)}
+.tile img,.tile .ph{width:78px;height:78px;border-radius:50%;object-fit:cover;
+  box-shadow:0 0 0 5px #fff,0 0 0 6px rgba(14,26,36,.1),0 12px 12px -6px rgba(14,26,36,.45);transition:transform .2s var(--ease)}
+.tile:hover img,.tile:hover .ph{transform:scale(1.06) rotate(-4deg)}
+.tile .ph{display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;line-height:1;
+  color:var(--cc,var(--pri));text-shadow:0 2px 0 rgba(255,255,255,.9);
+  background:radial-gradient(circle at 34% 26%,#fff 0 32%,#E7EFED 100%);
+  box-shadow:inset 0 0 0 9px #F7FAF9,inset 0 0 0 10px #D4DFDC,inset 0 -8px 12px rgba(14,26,36,.1),0 0 0 5px #fff,0 0 0 6px rgba(14,26,36,.1),0 12px 12px -6px rgba(14,26,36,.45)}
+.tile.off{filter:grayscale(.85)}
+.tile span{font-weight:700}
+
+/* ---------------------------------------------------------------------
+   5) المطبخ: تذاكر ورقية معلّقة بدبوس وحافة مسنّنة
+   --------------------------------------------------------------------- */
+.kds{gap:26px 18px;padding-top:12px}
+.kds .kt{--paper:#fff;--st:var(--info);position:relative;border:0;border-top:7px solid var(--st);border-radius:6px 6px 0 0;
+  background:var(--paper);padding:20px 12px 14px;margin-bottom:10px;box-shadow:none;
+  filter:drop-shadow(0 12px 8px rgba(14,26,36,.22)) drop-shadow(0 1px 1px rgba(14,26,36,.2))}
+.kds .kt.new{--st:var(--info)}
+.kds .kt.preparing{--st:var(--warn);--paper:#FFFBF0}
+.kds .kt.ready{--st:var(--ok);--paper:#F3FCF6}
+.kds .kt.cancelled{--st:var(--bad);--paper:#FEF4F4}
+.kds .kt::before{content:"";position:absolute;top:-13px;left:50%;width:15px;height:15px;margin-left:-7px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fff 0,#C5D0D6 40%,#6E7F8B 100%);box-shadow:0 3px 3px rgba(14,26,36,.4)}
+.kds .kt::after{content:"";position:absolute;left:0;right:0;top:100%;height:7px;background:var(--paper);
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/14px 100%;
+  mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/14px 100%}
+.kds .kt li{border-bottom:1px dashed #C9D4D0}
+
+/* ---------------------------------------------------------------------
+   6) تفاصيل عامة
+   --------------------------------------------------------------------- */
+.stat{box-shadow:var(--e1),inset 0 1px 0 #fff}
+dialog,#box{box-shadow:var(--e4),inset 0 1px 0 rgba(255,255,255,.9)}
+.dvc{box-shadow:var(--e1),inset 0 1px 0 #fff}
+
+@media (prefers-reduced-motion:reduce){#login .brand .scene,.floor .tbl.bill{animation:none}}
+@media print{.floor,.tile,.kt,.dbk{box-shadow:none!important;filter:none!important}}

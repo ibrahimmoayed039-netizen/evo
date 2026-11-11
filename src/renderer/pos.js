@@ -30,6 +30,8 @@ async function viewPos() {
   drawPos();
 }
 
+// لون شريط البلاطة = لون تصنيف الصنف (إن كان صالحاً)
+const tileColor = (i) => { const c = (PM.categories.find((x) => x.id === i.categoryId) || {}).color || ''; return /^#[0-9a-fA-F]{6}$/.test(c) ? ` style="--cc:${c}"` : ''; };
 const tileOut = (i) => i.soldOut || ((i.variants || []).length > 0 && i.variants.every((v) => v.soldOut));
 function drawPos() {
   const cats = PM.categories.filter((c) => c.active !== false);
@@ -40,8 +42,8 @@ function drawPos() {
   <div class="pos">
    <div>
     <div class="cats"><button data-c="" class="${P.cat ? '' : 'on'}">الكل</button>${cats.map((c) => `<button data-c="${esc(c.id)}" class="${P.cat === c.id ? 'on' : ''}" ${/^#[0-9a-fA-F]{6}$/.test(c.color || '') ? `style="border-inline-start:6px solid ${c.color}"` : ''}>${esc(c.name)}</button>`).join('')}</div>
-    <div class="grid">${items.map((i) => `<button class="tile ${tileOut(i) ? 'off' : ''}" data-i="${esc(i.id)}" ${tileOut(i) ? 'disabled' : ''}>
-      ${i.image ? `<img src="${esc(i.image)}">` : '<div class="ph"></div>'}<span>${esc(i.name)}</span><small>${(i.variants || []).length > 1 ? 'من ' + money(Math.min(...i.variants.map((v) => v.priceCents))) : money(i.priceCents)}${tileOut(i) ? ' — نفد' : ''}</small></button>`).join('') || '<div class="card">لا توجد أصناف. أضفها من صفحة المنيو.</div>'}</div>
+    <div class="grid">${items.map((i) => `<button class="tile ${tileOut(i) ? 'off' : ''}" data-i="${esc(i.id)}" ${tileOut(i) ? 'disabled' : ''}${tileColor(i)}>
+      ${i.image ? `<img src="${esc(i.image)}">` : `<div class="ph">${esc([...String(i.name || '').trim()][0] || '')}</div>`}<span>${esc(i.name)}</span><small>${(i.variants || []).length > 1 ? 'من ' + money(Math.min(...i.variants.map((v) => v.priceCents))) : money(i.priceCents)}${tileOut(i) ? ' — نفد' : ''}</small></button>`).join('') || '<div class="card">لا توجد أصناف. أضفها من صفحة المنيو.</div>'}</div>
    </div>
    <div class="card cart">
     <div class="head"><b>${P.number ? `طلب #${P.number} (مفتوح)` : 'طلب جديد'}</b></div>

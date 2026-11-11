@@ -53,9 +53,9 @@ async function viewDashboard() {
   const refund = t.refunds.count ? `<span class="dbd down">مرتجعات: ${money(t.refunds.totalCents)}</span>` : '';
   $('content').innerHTML = `${head}
    <div class="dbks">
-    ${kpi('مبيعات اليوم', money(t.netCents), `${dbDelta(t.netCents, y.netCents, 'عن أمس')} ${refund}`, 'main')}
-    ${kpi('عدد الطلبات', t.validCount, dbDelta(t.validCount, y.validCount, 'عن أمس'))}
-    ${kpi('متوسط الفاتورة', money(t.avgCents), dbDelta(t.avgCents, y.avgCents, 'عن أمس'))}
+    ${kpi('مبيعات اليوم', money(t.netCents), `${dbDelta(t.netCents, y.netCents, 'عن أمس')} ${refund}`, 'main art-coins')}
+    ${kpi('عدد الطلبات', t.validCount, dbDelta(t.validCount, y.validCount, 'عن أمس'), 'art-boxes')}
+    ${kpi('متوسط الفاتورة', money(t.avgCents), dbDelta(t.avgCents, y.avgCents, 'عن أمس'), 'art-receipt')}
    </div>
    <div class="tabs dbr">${DB_RANGES.map(([k, l]) => `<button class="${DBS.range === k ? 'on' : ''}" data-dbr="${k}">${l}</button>`).join('')}<span class="muted-l">الرسوم أدناه حسب الفترة المختارة</span></div>
    <div class="cols">

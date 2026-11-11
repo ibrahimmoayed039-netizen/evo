@@ -9,6 +9,8 @@ function tblChairs(shape, seats, w, h) {
   const n = Math.min(Math.max(1, seats | 0), 12), g = 10, out = [];
   if (shape === 'round') { const r = w / 2 + g; for (let i = 0; i < n; i++) { const a = (2 * Math.PI * i) / n - Math.PI / 2; out.push([Math.cos(a) * r, Math.sin(a) * r]); } return out; }
   const W = w + 2 * g, H = h + 2 * g, P = 2 * (W + H);
+  if (n === 1) return [[0, H / 2]]; // كرسي واحد: أمام الطاولة (لا في الزاوية)
+  if (n === 2) return [[0, -H / 2], [0, H / 2]]; // كرسيان: جهتان متقابلتان
   for (let i = 0; i < n; i++) {
     let d = ((i + 0.5) / n) * P, x, y;
     if (d < W) { x = -W / 2 + d; y = -H / 2; } else if ((d -= W) < H) { x = W / 2; y = -H / 2 + d; } else if ((d -= H) < W) { x = W / 2 - d; y = H / 2; } else { d -= W; x = -W / 2; y = H / 2 - d; }
@@ -19,7 +21,7 @@ function tblChairs(shape, seats, w, h) {
 
 function tblCard(t, manage) {
   const [bw, bh, cls] = T_DIM[t.shape] || T_DIM.rect, sc = T_SCALE[t.size] || 1, busy = t.status !== 'free', rv = t.reservation, n = t.orders.length;
-  const chairs = tblChairs(t.shape, t.seats, bw * sc, bh * sc).map(([x, y]) => `<i class="ch" style="left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px)"></i>`).join('');
+  const chairs = tblChairs(t.shape, t.seats, bw * sc, bh * sc).map(([x, y]) => `<i class="ch" style="left:calc(50% + ${x.toFixed(1)}px);top:calc(50% + ${y.toFixed(1)}px);--a:${Math.round((Math.atan2(y, x) * 180) / Math.PI)}deg"></i>`).join('');
   return `<div class="tbl ${cls} ${t.status} ${rv ? 'rsv' : ''}" data-t="${esc(t.id)}" style="left:${t.x}%;top:${t.y}%;--s:${sc}">${chairs}<b>${esc(t.name)}</b>
     ${busy ? `<span>${money(t.totalCents)}</span><small class="tm" data-pre="⏱ " data-since="${esc(t.seatedAt)}">⏱ ${ago(t.seatedAt)}</small>${t.status === 'bill' ? `<small class="bl" title="تنتظر الحساب منذ" data-pre="🧾 " data-since="${esc(t.billAt)}">🧾 ${ago(t.billAt)}</small>` : ''}${n > 1 ? `<small>${n} طلبات</small>` : ''}` : `<small>${t.seats} مقاعد</small>`}
     ${rv ? `<small class="rv">🕒 ${esc(rv.time)} — ${esc(rv.name)}${rv.late ? ' (متأخر)' : ''}</small>` : ''}</div>`;
