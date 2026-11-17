@@ -12,6 +12,7 @@ import com.restaurant.waiter.data.ApiException
 import com.restaurant.waiter.data.AppState
 import com.restaurant.waiter.data.Discovery
 import com.restaurant.waiter.data.Prefs
+import com.restaurant.waiter.data.SeenAlerts
 import com.restaurant.waiter.data.SeenReady
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +68,9 @@ class ReadyService : Service() {
                 val fresh = SeenReady.fresh(r.map { it.id }).toSet()
                 r.filter { it.id in fresh }.forEach { Notifier.ready(this, it); shown += it.id }
                 shown.filter { id -> r.none { it.id == id } }.forEach { Notifier.cancel(this, it); shown -= it }
+                val al = api.alerts()
+                val freshAlerts = SeenAlerts.fresh(al.map { it.id }).toSet()
+                al.filter { it.id in freshAlerts }.forEach { Notifier.alert(this, it) }
             } catch (e: ApiException) {
                 if (e.code == 401 || e.code == 495) {
                     prefs.token = ""

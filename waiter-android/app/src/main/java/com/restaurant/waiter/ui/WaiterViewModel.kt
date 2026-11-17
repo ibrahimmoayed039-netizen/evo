@@ -41,6 +41,7 @@ class WaiterViewModel(app: Application) : AndroidViewModel(app) {
     var tables by mutableStateOf<List<TableInfo>>(emptyList()); private set
     var menu by mutableStateOf<Menu?>(null); private set
     var ready by mutableStateOf<List<ReadyTicket>>(emptyList()); private set
+    var alerts by mutableStateOf<List<KitchenAlert>>(emptyList()); private set
     var existing by mutableStateOf<OrderInfo?>(null); private set
     var target by mutableStateOf<Target?>(null); private set
     var cart by mutableStateOf<List<CartLine>>(emptyList()); private set
@@ -177,7 +178,7 @@ class WaiterViewModel(app: Application) : AndroidViewModel(app) {
             loggedIn = true
             prefs.lastUser = s.id
             prefs.token = token
-            SeenReady.reset()
+            SeenReady.reset(); SeenAlerts.reset()
             ReadyService.start(getApplication())
             checkBattery()
             val m = api.menu()
@@ -249,6 +250,15 @@ class WaiterViewModel(app: Application) : AndroidViewModel(app) {
         val r = api.ready()
         if (SeenReady.fresh(r.map { it.id }).isNotEmpty()) beep()
         ready = r
+        val al = api.alerts()
+        if (SeenAlerts.fresh(al.map { it.id }).isNotEmpty()) beep()
+        alerts = al
+    }
+
+    /** النادل قرأ تنبيه المطبخ: نؤكد للخادم فيختفي من كل الأجهزة */
+    fun ackAlert(a: KitchenAlert) {
+        alerts = alerts.filter { it.id != a.id }
+        launchApi(false) { api.ackAlert(a.id) }
     }
 
     private suspend fun refreshExisting() {

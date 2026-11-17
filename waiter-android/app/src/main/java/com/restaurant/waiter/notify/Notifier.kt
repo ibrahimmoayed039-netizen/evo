@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.restaurant.waiter.MainActivity
 import com.restaurant.waiter.R
+import com.restaurant.waiter.data.KitchenAlert
 import com.restaurant.waiter.data.ReadyTicket
 
 object Notifier {
@@ -71,6 +72,25 @@ object Notifier {
             .setContentIntent(open(ctx))
             .build()
         try { nm.notify(idOf(t.id), n) } catch (e: SecurityException) {}
+    }
+
+    /** المطبخ ألغى صنفاً: إشعار عالي الأهمية بالطاولة والصنف والسبب (يبقى حتى يفتحه النادل) */
+    fun alert(ctx: Context, a: KitchenAlert) {
+        val nm = NotificationManagerCompat.from(ctx)
+        if (!nm.areNotificationsEnabled()) return
+        val text = "${a.qty}× ${a.itemName} — ${a.reason}"
+        val n = NotificationCompat.Builder(ctx, CH_READY)
+            .setSmallIcon(R.drawable.ic_notify)
+            .setContentTitle("ألغى المطبخ · ${a.where}")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\nطلب #${a.orderNumber} — حُذف من الفاتورة"))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+            .setAutoCancel(true)
+            .setContentIntent(open(ctx))
+            .build()
+        try { nm.notify(2_000_000 + (a.id % 1_000_000).toInt(), n) } catch (e: SecurityException) {}
     }
 
     fun cancel(ctx: Context, ticketId: Long) = NotificationManagerCompat.from(ctx).cancel(idOf(ticketId))

@@ -73,6 +73,15 @@ fun App(vm: WaiterViewModel) {
         if (vm.notice != null) { delay(4000); vm.notice = null }
     }
     if (vm.askBattery) BatteryDialog(vm)
+    vm.alerts.firstOrNull()?.let { a ->
+        // يظهر فوق أي شاشة (الطاولات أو الطلب) حتى يضغط النادل «حسناً»
+        AlertDialog(
+            onDismissRequest = { vm.ackAlert(a) },
+            title = { Text("ألغى المطبخ · ${a.where}") },
+            text = { Text("${a.qty}× ${a.itemName}\nالسبب: ${a.reason}\nطلب #${a.orderNumber} — حُذف الصنف من الفاتورة، أبلغ الزبون.") },
+            confirmButton = { TextButton(onClick = { vm.ackAlert(a) }) { Text("حسناً") } },
+        )
+    }
     Surface(Modifier.fillMaxSize(), color = Color(0xFFF8FAFC)) {
         Box(Modifier.fillMaxSize()) {
             when (vm.screen) {

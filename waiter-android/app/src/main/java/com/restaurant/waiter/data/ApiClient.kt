@@ -118,6 +118,15 @@ class ApiClient {
 
     suspend fun ready(): List<ReadyTicket> = request("GET", "/api/ready").getJSONArray("tickets").objects().map { it.toReady() }
 
+    /** تنبيهات المطبخ (أصناف ألغاها). خادم أقدم لا يعرفها (404) فنُرجع قائمة فارغة بدل أن نعطّل التحديث. */
+    suspend fun alerts(): List<KitchenAlert> = try {
+        request("GET", "/api/alerts").getJSONArray("alerts").objects().map { it.toAlert() }
+    } catch (e: ApiException) {
+        if (e.code == 404) emptyList() else throw e
+    }
+
+    suspend fun ackAlert(id: Long) { request("POST", "/api/alerts/$id/ack", JSONObject()) }
+
     suspend fun served(ticketId: Long) { request("POST", "/api/tickets/$ticketId/served", JSONObject()) }
 
     suspend fun requestBill(orderId: Long): OrderInfo =

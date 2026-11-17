@@ -35,6 +35,10 @@ data class OrderInfo(
     val hasUnsent get() = lines.any { it.sentQty < it.qty }
 }
 data class ReadyTicket(val id: Long, val orderNumber: Int, val tableLabel: String, val type: String, val items: List<String>)
+/** تنبيه من المطبخ: ألغى صنفاً من طلب هذا النادل (أُزيل من الفاتورة) مع السبب */
+data class KitchenAlert(val id: Long, val orderNumber: Int, val tableLabel: String, val type: String, val itemName: String, val qty: Int, val reason: String) {
+    val where get() = if (tableLabel.isNotBlank()) tableLabel else type
+}
 data class SubmitResult(val order: OrderInfo, val sent: Boolean, val sendError: String?)
 
 data class Pick(val groupId: String, val index: Int, val name: String, val priceCents: Int)
@@ -88,6 +92,11 @@ fun JSONObject.toOrder() = OrderInfo(
             l.getJSONArray("mods").let { a -> List(a.length()) { a.getString(it) } },
         )
     },
+)
+
+fun JSONObject.toAlert() = KitchenAlert(
+    id = getLong("id"), orderNumber = getInt("orderNumber"), tableLabel = optString("tableLabel", ""), type = optString("type", ""),
+    itemName = getString("itemName"), qty = getInt("qty"), reason = getString("reason"),
 )
 
 fun JSONObject.toReady() = ReadyTicket(

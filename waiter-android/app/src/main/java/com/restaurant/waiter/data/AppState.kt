@@ -5,6 +5,17 @@ object AppState {
     @Volatile var foreground = false
 }
 
+/** تنبيهات المطبخ التي نُبّه عنها (مشتركة بين الواجهة والخدمة) */
+object SeenAlerts {
+    private var seen = emptySet<Long>()
+    @Synchronized fun fresh(ids: List<Long>): List<Long> {
+        val f = ids.filter { it !in seen }
+        seen = ids.toSet()
+        return f
+    }
+    @Synchronized fun reset() { seen = emptySet() }
+}
+
 /** تذاكر «جاهز» التي نُبّه عنها مسبقاً (مشتركة بين الواجهة والخدمة حتى لا يتكرر الصوت/الإشعار لنفس التذكرة). */
 object SeenReady {
     private var seen = emptySet<Long>()
