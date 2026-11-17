@@ -11,6 +11,8 @@ async function viewWaiter() {
     <div class="drow"><label>المنفذ</label><input id="wPort" type="number" min="1024" max="65535" value="${esc(c.port)}"></div>
     <div class="muted">أدخل أحد هذه العناوين في التطبيق:</div>
     <div dir="ltr" style="text-align:right;font-weight:bold">${i.addresses.length ? i.addresses.map(esc).join('<br>') : 'لا توجد شبكة'}</div>
+    <div class="muted">شاشة المطبخ على جهاز آخر (تابلت/تلفزيون): افتح في متصفحه أحد هذه الروابط، اقبل تحذير الشهادة مرة واحدة، وادخل بحساب بدور «مطبخ»:</div>
+    <div dir="ltr" style="text-align:right;font-weight:bold">${s.running && i.addresses.length ? i.addresses.map((a) => esc('https://' + a + '/kds')).join('<br>') : 'فعّل التطبيق أولاً'}</div>
     <div class="muted">بصمة الأمان (يجب أن تطابق ما يعرضه التطبيق عند أول اتصال):</div>
     <div dir="ltr" id="wFp" style="text-align:right;font-weight:bold;font-size:1.2em;letter-spacing:1px">${esc(i.tls.pretty)}</div>
     <div class="muted">الأجهزة المتصلة الآن: ${i.sessions}. أنشئ حسابات النادل من صفحة «المستخدمين» بدور «نادل» (رمز من 4 إلى 8 أرقام).</div>

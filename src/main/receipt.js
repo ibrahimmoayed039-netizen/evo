@@ -56,11 +56,11 @@ function buildKotHTML(t, { width = 80 } = {}) {
   @page{margin:0}*{box-sizing:border-box}
   body{margin:0;padding:2mm;width:${width}mm;font:${width === 58 ? 15 : 18}px/1.35 Tahoma,Arial,sans-serif;color:#000;background:#fff}
   h1{font-size:1.3em;text-align:center;margin:0}.m{text-align:center;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px}
-  .it{padding:4px 0;border-bottom:1px dashed #000}.s{font-size:.8em;padding-right:1.5em}.x{text-align:center;font-size:1.3em;border:2px solid #000;margin:4px 0}
+  .it{padding:4px 0;border-bottom:1px dashed #000}.s{font-size:.8em;padding-right:1.5em}.x{text-align:center;font-size:1.6em;font-weight:bold;background:#000;color:#fff;padding:6px 0;margin:4px 0}.c .it{text-decoration:line-through}
   </style></head><body>
   <h1>${esc(t.stationName)}</h1>
   <div class="m">طلب #${esc(t.orderNumber)}${t.batch > 1 ? ` — دفعة ${t.batch}` : ''}<br>${esc(t.type)}${t.tableLabel ? ' — طاولة ' + esc(t.tableLabel) : ''} — ${esc(time)}</div>
-  ${t.status === 'cancelled' ? '<div class="x">*** ملغاة ***</div>' : ''}${rows}</body></html>`;
+  ${t.status === 'cancelled' ? '<div class="x">*** إلغاء — أوقف التحضير ***</div>' : ''}<div class="${t.status === 'cancelled' ? 'c' : ''}">${rows}</div></body></html>`;
 }
 
 // تقرير الوردية (X إن كانت مفتوحة، Z إن كانت مغلقة). أرقام المتوقع/الفرق تظهر فقط إن طُلبت (الإغلاق الأعمى للكاشير)

@@ -34,7 +34,11 @@ function init(file) {
      station_id TEXT NOT NULL, station_name TEXT NOT NULL, batch INTEGER NOT NULL, type TEXT NOT NULL, table_label TEXT NOT NULL DEFAULT '',
      items TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('new','preparing','ready','done','cancelled','ack')),
      created_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, done_at TEXT);
-   CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, station_id);`);
+   CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, station_id);
+   CREATE TABLE IF NOT EXISTS kitchen_alerts(
+     id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, order_number INTEGER NOT NULL, table_label TEXT NOT NULL DEFAULT '',
+     type TEXT NOT NULL, user_id TEXT, item_name TEXT NOT NULL, qty INTEGER NOT NULL, reason TEXT NOT NULL, station_name TEXT NOT NULL DEFAULT '',
+     created_at TEXT NOT NULL, ack_at TEXT);`);
   // ترحيل: ربط الطلب بطاولة (قواعد المرحلة 3 لا تحتوي العمود)
   if (!sql.prepare('PRAGMA table_info(orders)').all().some((c) => c.name === 'table_id')) sql.exec('ALTER TABLE orders ADD COLUMN table_id TEXT');
   sql.exec('CREATE INDEX IF NOT EXISTS idx_orders_table ON orders(table_id)');
@@ -58,14 +62,18 @@ const toCents = (v, max = 10000000) => {
 const text = (s, max) => String(s ?? '').trim().slice(0, max);
 
 // ---------- بناء السطور من المنيو ----------
-function buildLines(lines) {
+// prevLines: سطور الطلب المحفوظة سابقاً. ما أُرسل منها للمطبخ يبقى مقبولاً لو نفد الصنف بعد الإرسال
+// (وإلا تعذّر حفظ/دفع طاولة فيها صنف نفد)، أما الزيادة عليه فمرفوضة.
+function buildLines(lines, prevLines = []) {
   const d = db.get();
   if (!Array.isArray(lines) || !lines.length) throw new Error('الطلب فارغ');
   if (lines.length > 100) throw new Error('عدد الأصناف كبير');
+  const sentPool = {};
+  (prevLines || []).forEach((l) => { const k = l.itemId + '|' + (l.variantId || ''); sentPool[k] = (sentPool[k] || 0) + (l.sentQty || 0); });
+  const soldOutOk = (it, vr, qty) => { const k = it.id + '|' + (vr ? vr.id : ''); if ((sentPool[k] || 0) < qty) return false; sentPool[k] -= qty; return true; };
   return lines.map((l) => {
     const it = d.items.find((x) => x.id === l.itemId);
     if (!it || !it.active) throw new Error('صنف غير متاح');
-    if (it.soldOut) throw new Error(`«${it.name}» نفد`);
     const qty = Number(l.qty);
     if (!Number.isInteger(qty) || qty < 1 || qty > 99) throw new Error('كمية غير صالحة');
     const groups = (it.modifierGroupIds || []).map((id) => d.modGroups.find((g) => g.id === id)).filter(Boolean);
@@ -83,8 +91,9 @@ function buildLines(lines) {
     if ((it.variants || []).length) {
       vr = l.variantId ? it.variants.find((v) => v.id === l.variantId) : it.variants.find((v) => v.isDefault) || it.variants[0];
       if (!vr) throw new Error(`اختر نوع «${it.name}»`);
-      if (vr.soldOut) throw new Error(`«${it.name} · ${vr.name}» نفد`);
     }
+    if (it.soldOut && !soldOutOk(it, vr, qty)) throw new Error(`«${it.name}» نفد`);
+    if (vr?.soldOut && !soldOutOk(it, vr, qty)) throw new Error(`«${it.name} · ${vr.name}» نفد`);
     const base = vr ? vr.priceCents : it.priceCents;
     const unitCents = base + mods.reduce((s, m) => s + m.priceCents, 0);
     return { itemId: it.id, ...(vr ? { variantId: vr.id, variantName: vr.name } : {}), name: vr ? `${it.name} · ${vr.name}` : it.name, qty, baseCents: base, unitCents, mods, note: text(l.note, 100), totalCents: unitCents * qty, sentQty: 0 };
@@ -129,7 +138,7 @@ function deliveryPart(p, L, cur) {
 }
 
 function quote(p = {}) {
-  const L = buildLines(p.lines), cur = p.id ? parse(sql.prepare('SELECT * FROM orders WHERE id=?').get(p.id)) : null, d = deliveryPart(p, L, cur);
+  const cur = p.id ? parse(sql.prepare('SELECT * FROM orders WHERE id=?').get(p.id)) : null, L = buildLines(p.lines, cur?.lines), d = deliveryPart(p, L, cur);
   return { lines: L, ...totals(L, p.discount, false, d.fee), deliveryZone: d.zoneName, freeDelivery: !!d.free };
 }
 
@@ -160,12 +169,14 @@ function list({ status, days = 1 } = {}) {
 
 // ---------- تتبع ما أُرسل للمطبخ ----------
 const lineKey = (l) => l.itemId + '|' + (l.variantId || '') + '|' + l.mods.map((m) => m.g + ':' + m.o).sort().join(',') + '|' + (l.note || '');
-// عند إعادة حفظ طلب: نُبقي الكمية المرسلة لكل سطر مطابق (لا تُرسل مرتين)
+// عند إعادة حفظ طلب: نُبقي الكمية المرسلة لكل سطر مطابق (لا تُرسل مرتين).
+// تقليل/حذف صنف أُرسل يُرجع في القائمة الناتجة (removed) ليُبلَّغ المطبخ بإلغائه؛ وتنخفض sentQty معه
+// فإن رُفعت الكمية بعدها يُرسل الفرق للمطبخ من جديد (لأن المطبخ أُبلغ بالإلغاء).
 function carrySent(newLines, oldLines) {
-  const pool = {};
-  oldLines.forEach((l) => { const k = lineKey(l); pool[k] = (pool[k] || 0) + (l.sentQty || 0); });
-  // لا نخفض sentQty عند تقليل الكمية: ما حُضِّر في المطبخ لا يعود، فلا يُرسل مجدداً إن رُفعت الكمية
-  newLines.forEach((l) => { const k = lineKey(l); l.sentQty = pool[k] || 0; pool[k] = 0; });
+  const pool = {}, tpl = {};
+  oldLines.forEach((l) => { const k = lineKey(l); pool[k] = (pool[k] || 0) + (l.sentQty || 0); tpl[k] = tpl[k] || l; });
+  newLines.forEach((l) => { const k = lineKey(l), have = pool[k] || 0; l.sentQty = Math.min(have, l.qty); pool[k] = have - l.sentQty; });
+  return Object.keys(pool).filter((k) => pool[k] > 0).map((k) => ({ itemId: tpl[k].itemId, ...(tpl[k].variantId ? { variantId: tpl[k].variantId } : {}), name: tpl[k].name, qty: pool[k], mods: tpl[k].mods.map((m) => m.name), note: tpl[k].note || '' }));
 }
 const TICKET_LIVE = "('new','preparing','ready')";
 
@@ -197,15 +208,16 @@ function save(p) {
   }
   const cust = { name: text(p.customer?.name, 60), phone: text(p.customer?.phone, 20), address: text(p.customer?.address, 200) };
   if (p.type === 'delivery' && !cust.phone) throw new Error('أدخل رقم جوال العميل للتوصيل');
-  const L = buildLines(p.lines), prev = p.id ? parse(sql.prepare('SELECT * FROM orders WHERE id=?').get(p.id)) : null, d = deliveryPart(p, L, prev), t = totals(L, p.discount, false, d.fee);
+  const prev = p.id ? parse(sql.prepare('SELECT * FROM orders WHERE id=?').get(p.id)) : null, L = buildLines(p.lines, prev?.lines), d = deliveryPart(p, L, prev), t = totals(L, p.discount, false, d.fee);
   const o = { type: p.type, tableId, table, customer: p.type === 'delivery' ? cust : {}, note: text(p.note, 200), deliveryZoneId: d.zoneId, deliveryZone: d.zoneName, feeManual: d.manual };
+  let removed = [];
   const id = sql.transaction(() => {
     if (p.id) {
       const cur = sql.prepare('SELECT status FROM orders WHERE id=?').get(p.id);
       if (!cur) throw new Error('الطلب غير موجود');
       if (cur.status !== 'open') throw new Error('لا يمكن تعديل طلب مدفوع أو ملغي');
       if (prev.type === 'delivery' && p.type !== 'delivery' && prev.deliveryStatus !== 'preparing') throw new Error('الطلب خرج للتوصيل؛ لا يمكن تغيير نوعه');
-      carrySent(L, JSON.parse(sql.prepare('SELECT lines FROM orders WHERE id=?').get(p.id).lines));
+      removed = carrySent(L, JSON.parse(sql.prepare('SELECT lines FROM orders WHERE id=?').get(p.id).lines));
       updateOrder(p.id, o, L, t);
       if (p.type !== 'delivery') sql.prepare('UPDATE orders SET delivery_status=NULL, driver_id=NULL, driver_name=NULL, driver_wage_cents=NULL, out_at=NULL, delivered_at=NULL WHERE id=?').run(p.id);
       else if (prev.type !== 'delivery') sql.prepare("UPDATE orders SET delivery_status='preparing' WHERE id=?").run(p.id);
@@ -215,7 +227,29 @@ function save(p) {
   })();
   const r = get(Number(id));
   auth.audit(p.id ? 'order_update' : 'order_create', `#${r.number} (${TYPES[r.type]}${r.table ? ' ' + r.table : ''})${t.discountCents ? ' — خصم ' + (t.discountCents / 100).toFixed(2) : ''}`);
+  if (removed.length) r.removedSent = removed; // أصناف أُرسلت ثم قُلّلت/حُذفت: يتولى main.js إبلاغ المطبخ
   return r;
+}
+
+// ---------- رفض المطبخ لصنف أُرسل إليه: يُنقَص من الطلب المفتوح (فلا يُحاسَب عليه الزبون) ----------
+// إن كان آخر ما في الطلب تُرجع empty:true دون تعديل، فتلغي kitchen.rejectItem الطلب كله. تتولى kitchen.rejectItem التذكرة والتنبيه.
+function kitchenReject(id, { itemId, variantId, mods, note, qty }) {
+  const o = needOpen(get(id));
+  const sig = (l) => l.itemId + '|' + (l.variantId || '') + '|' + l.mods.map((m) => m.name).sort().join(',') + '|' + (l.note || '');
+  const target = sig({ itemId, variantId, mods: (mods || []).map((name) => ({ name })), note });
+  let left = qty;
+  const lines = o.lines.map((l) => ({ ...l }));
+  for (const l of lines) {
+    if (left > 0 && sig(l) === target) {
+      const take = Math.min(left, l.qty);
+      l.qty -= take; l.sentQty = Math.max(0, (l.sentQty || 0) - take); l.totalCents = l.unitCents * l.qty; left -= take;
+    }
+  }
+  if (left > 0) throw new Error('الصنف لم يعد بهذه الكمية في الطلب (عُدِّل بعد الإرسال)');
+  const rest = lines.filter((l) => l.qty > 0);
+  if (!rest.length) return { empty: true, order: o }; // لا يُعدَّل شيء: المستدعي يلغي الطلب كله خارج معاملته
+  updateOrder(id, base(o), rest, totals(rest, o.discount, true, o.deliveryFeeCents));
+  return { empty: false, order: get(id) };
 }
 
 // ---------- «طلب الحساب»: الطاولة تتحول إلى «تنتظر الحساب» حتى الدفع/الإلغاء/إلغاء الطلب ----------
@@ -359,4 +393,4 @@ function toReceipt(id) {
   };
 }
 
-module.exports = { init, close, quote, save, pay, get, list, voidOrder, toReceipt, openByTable, relabel, moveOrder, merge, split, requestBill, raw: () => sql };
+module.exports = { init, close, quote, save, pay, get, list, voidOrder, kitchenReject, toReceipt, openByTable, relabel, moveOrder, merge, split, requestBill, raw: () => sql };

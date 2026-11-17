@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const auth = require('./auth');
 const orders = require('./orders');
+const menu = require('./menu');
 
 const TYPES = { dine_in: 'صالة', takeaway: 'سفري', delivery: 'توصيل' };
 const stations = () => db.get().stations;
@@ -60,7 +61,7 @@ function send(orderId) {
     if (delta <= 0) continue;
     const st = station(d.items.find((x) => x.id === l.itemId)?.stationId) || d.stations[0];
     if (!by.has(st.id)) by.set(st.id, { st, items: [] });
-    by.get(st.id).items.push({ name: l.name, qty: delta, mods: l.mods.map((m) => m.name), note: l.note });
+    by.get(st.id).items.push({ itemId: l.itemId, ...(l.variantId ? { variantId: l.variantId } : {}), name: l.name, qty: delta, mods: l.mods.map((m) => m.name), note: l.note });
     l.sentQty = l.qty;
   }
   if (!by.size) throw new Error('لا توجد أصناف جديدة للإرسال');
@@ -76,11 +77,75 @@ function send(orderId) {
   return ids.map(ticket);
 }
 
+// ---------- إلغاء أصناف بعد الإرسال ----------
+// تذكرة «ملغاة» بالأصناف المُلغاة فقط على محطة كل صنف؛ يضغط المطبخ «تم» (ack) بعد رؤيتها.
+function cancelItems(orderId, removed) {
+  if (!enabled() || !removed?.length) return [];
+  const o = orders.get(orderId), d = db.get(), by = new Map();
+  for (const r of removed) {
+    const st = station(d.items.find((x) => x.id === r.itemId)?.stationId) || d.stations[0];
+    if (!by.has(st.id)) by.set(st.id, { st, items: [] });
+    by.get(st.id).items.push({ itemId: r.itemId, ...(r.variantId ? { variantId: r.variantId } : {}), name: r.name, qty: r.qty, mods: r.mods || [], note: r.note || '' });
+  }
+  const now = new Date().toISOString(), db3 = sql();
+  const ids = db3.transaction(() => {
+    const batch = db3.prepare('SELECT COALESCE(MAX(batch),1) b FROM tickets WHERE order_id=?').get(orderId).b; // بلا رفع رقم الدفعة التالية
+    const ins = db3.prepare("INSERT INTO tickets(order_id,order_number,station_id,station_name,batch,type,table_label,items,status,created_at) VALUES(?,?,?,?,?,?,?,?,'cancelled',?)");
+    return [...by.values()].map(({ st, items }) => Number(ins.run(orderId, o.number, st.id, st.name, batch, TYPES[o.type], o.table || '', JSON.stringify(items), now).lastInsertRowid));
+  })();
+  auth.audit('kitchen_cancel_items', `#${o.number} → ${removed.map((r) => `${r.qty}× ${r.name}`).join('، ')}`);
+  return ids.map(ticket);
+}
+
+// ---------- رفض المطبخ لصنف + تنبيه النادل ----------
+const REJECT_REASONS = ['نفد', 'خطأ في الطلب', 'لا يمكن تحضيره', 'سبب آخر'];
+function rejectItem(ticketId, index, reason) {
+  const t = ticket(ticketId);
+  if (!t) throw new Error('التذكرة غير موجودة');
+  if (!['new', 'preparing'].includes(t.status)) throw new Error('لا يمكن إلغاء صنف بعد أن صارت التذكرة جاهزة أو مغلقة');
+  const it = t.items[index];
+  if (!it || it.rejected) throw new Error('الصنف غير موجود أو أُلغي مسبقاً');
+  if (!it.itemId) throw new Error('تذكرة قديمة لا تحمل بيانات الصنف: يُلغى الصنف من الكاشير');
+  if (!REJECT_REASONS.includes(reason)) throw new Error('اختر سبب الإلغاء');
+  const db3 = sql(), now = new Date().toISOString();
+  const out = db3.transaction(() => {
+    const items = t.items.map((x, n) => (n === index ? { ...x, rejected: { reason, at: now } } : x));
+    const allOut = items.every((x) => x.rejected);
+    db3.prepare('UPDATE tickets SET items=?, status=? WHERE id=?').run(JSON.stringify(items), allOut ? 'ack' : t.status, ticketId);
+    const by = db3.prepare('SELECT user_id FROM orders WHERE id=?').get(t.orderId)?.user_id || null;
+    const res = orders.kitchenReject(t.orderId, { itemId: it.itemId, variantId: it.variantId, mods: it.mods, note: it.note, qty: it.qty });
+    db3.prepare('INSERT INTO kitchen_alerts(order_id,order_number,table_label,type,user_id,item_name,qty,reason,station_name,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)')
+      .run(t.orderId, t.orderNumber, t.tableLabel || '', t.type, by, it.name, it.qty, reason, t.stationName, now);
+    auth.audit('kitchen_reject', `#${t.orderNumber}${t.tableLabel ? ' ' + t.tableLabel : ''} — ${it.qty}× ${it.name} — ${reason}${res.empty ? ' (آخر صنف: يُلغى الطلب كله)' : ''}`);
+    return { empty: res.empty };
+  })();
+  if (out.empty) orders.voidOrder(t.orderId, 'ألغاه المطبخ'); // معاملة مستقلة (لا تداخل معاملات)
+  return { ticket: ticket(ticketId), orderVoided: out.empty };
+}
+// تنبيهات النادل: ما رفضه المطبخ من طلباته (أو من طلبات لم يفتحها نادل: الكاشير مثلاً) ولم يؤكد استلامه
+function alertsFor(user) {
+  const since = new Date(Date.now() - 6 * 3600e3).toISOString();
+  const roleOf = (id) => db.get().users.find((u) => u.id === id)?.role;
+  return sql().prepare('SELECT * FROM kitchen_alerts WHERE ack_at IS NULL AND created_at>=? ORDER BY id').all(since)
+    .filter((r) => r.user_id === user.id || roleOf(r.user_id) !== 'waiter')
+    .map((r) => ({ id: r.id, orderId: r.order_id, orderNumber: r.order_number, tableLabel: r.table_label, type: TYPES[r.type] || r.type, itemName: r.item_name, qty: r.qty, reason: r.reason, stationName: r.station_name, createdAt: r.created_at }));
+}
+const ackAlert = (id) => sql().prepare('UPDATE kitchen_alerts SET ack_at=? WHERE id=? AND ack_at IS NULL').run(new Date().toISOString(), id);
+
 // ---------- الشاشة ----------
+// soldOut لكل صنف في التذكرة: حالته الحالية في المنيو (لعرض زر «نفد/متوفر» بدون طلب إضافي)
+const isOut = (i) => { const it = db.get().items.find((x) => x.id === i.itemId); if (!it) return false; const vr = i.variantId && (it.variants || []).find((v) => v.id === i.variantId); return !!it.soldOut || !!vr?.soldOut; };
 const board = (stationId) => {
   const q = "SELECT * FROM tickets WHERE status IN ('new','preparing','ready','cancelled')" + (stationId ? ' AND station_id=?' : '') + ' ORDER BY id';
-  return (stationId ? sql().prepare(q).all(stationId) : sql().prepare(q).all()).map(row);
+  return (stationId ? sql().prepare(q).all(stationId) : sql().prepare(q).all()).map(row).map((t) => ({ ...t, items: t.items.map((i) => (i.itemId ? { ...i, soldOut: isOut(i) } : i)) }));
 };
+// المطبخ يوقف/يعيد صنفاً (أو نوعاً منه) في المنيو: يظهر فوراً للكاشير والنادل ومنيو QR، والطلبات المفتوحة التي أُرسل منها لا تتأثر
+function setSoldOut(itemId, variantId, v) {
+  const it = db.get().items.find((x) => x.id === itemId);
+  if (!it) throw new Error('الصنف غير موجود');
+  if (variantId) menu.setVariantSoldOut(itemId, String(variantId), !!v); else menu.setSoldOut(itemId, !!v);
+  return { itemId, variantId: variantId || null, soldOut: !!v };
+}
 const FLOW = {
   start: { from: ['new'], to: 'preparing', col: 'started_at' },
   ready: { from: ['new', 'preparing'], to: 'ready', col: 'ready_at' },
@@ -101,4 +166,4 @@ function bump(id, action) {
   return ticket(id);
 }
 
-module.exports = { enabled, stations, station, saveStation, deleteStation, send, board, bump, ticket };
+module.exports = { enabled, stations, station, saveStation, deleteStation, send, cancelItems, board, bump, ticket, setSoldOut, rejectItem, alertsFor, ackAlert, REJECT_REASONS };

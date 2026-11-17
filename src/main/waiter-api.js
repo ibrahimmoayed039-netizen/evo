@@ -3,6 +3,8 @@
 // الأمان: دخول بالرمز السري ← رمز جلسة عشوائي (Bearer)، الصلاحيات تُفحص هنا بنفس أدوار البرنامج،
 // حد معدل لكل عنوان، حجم الطلب محدود، ولا تُلمس جلسة الكاشير على الشاشة (auth.runAs).
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const db = require('./db');
@@ -14,6 +16,13 @@ const qrmenu = require('./qrmenu');
 const tlsCert = require('./tls-cert');
 const discovery = require('./waiter-discovery');
 const { can } = require('./permissions');
+
+// صفحة شاشة المطبخ للمتصفح (/kds): ملفان ثابتان بلا تبعيات. السكربت منفصل ليعمل مع CSP صارم (script-src 'self')
+const KDS_DIR = path.join(__dirname, 'kds-web');
+const KDS_HTML = fs.readFileSync(path.join(KDS_DIR, 'index.html'));
+const KDS_JS = fs.readFileSync(path.join(KDS_DIR, 'kds.js'));
+class Page { constructor(type, buf) { this.type = type; this.buf = buf; } }
+const KDS_ACTIONS = ['start', 'ready', 'done', 'ack', 'back'];
 
 let server = null, listenPort = null, lastError = '', deps = { sendToKitchen: null };
 const sessions = new Map();   // token -> { userId, exp }
@@ -72,9 +81,9 @@ function authenticate(req) {
   if (!s) return null;
   if (s.exp < Date.now()) { sessions.delete(m[1]); return null; }
   const u = db.get().users.find((x) => x.id === s.userId && x.active);
-  if (!u || !can(u.role, 'pos')) { sessions.delete(m[1]); return null; } // عُطّل أو تغيّر دوره
+  if (!u || !can(u.role, s.kds ? 'kitchen.view' : 'pos')) { sessions.delete(m[1]); return null; } // عُطّل أو تغيّر دوره
   s.exp = Date.now() + SESSION_MS;
-  return { token: m[1], user: u };
+  return { token: m[1], user: u, kds: !!s.kds };
 }
 const need = (user, perm) => { if (!can(user.role, perm)) throw new HttpError(403, 'غير مصرح لك بهذا الإجراء'); };
 
@@ -181,24 +190,57 @@ const ID = /^\d{1,12}$/;
 async function route(req, res) {
   const u = new URL(req.url, 'http://x'), p = u.pathname, m = req.method, ip = req.socket.remoteAddress || '';
   if (limiter(hits, ip, 300)) throw new HttpError(429, 'طلبات كثيرة، انتظر قليلاً');
+  if (m === 'GET' && (p === '/kds' || p === '/kds/')) return new Page('text/html; charset=utf-8', KDS_HTML);
+  if (m === 'GET' && p === '/kds.js') return new Page('application/javascript; charset=utf-8', KDS_JS);
   if (!p.startsWith('/api/')) throw new HttpError(404, 'غير موجود');
 
   if (p === '/api/ping' && m === 'GET') return { app: 'restaurant-pos-waiter', version: 2, name: db.get().settings.restaurant, fp: tlsCert.load().fp };
-  if (p === '/api/staff' && m === 'GET') return { staff: db.get().users.filter((x) => x.active && can(x.role, 'pos')).map((x) => ({ id: x.id, name: x.name })) };
+  if (p === '/api/staff' && m === 'GET') {
+    const perm = u.searchParams.get('kds') === '1' ? 'kitchen.view' : 'pos'; // ?kds=1: قائمة شاشة المطبخ
+    return { staff: db.get().users.filter((x) => x.active && can(x.role, perm)).map((x) => ({ id: x.id, name: x.name })) };
+  }
   if (p === '/api/login' && m === 'POST') {
     if (limiter(loginHits, ip, 20)) throw new HttpError(429, 'محاولات دخول كثيرة، انتظر دقيقة');
     const b = await readBody(req);
     let user;
     try { user = auth.loginApi(String(b.id ?? ''), String(b.pin ?? '')); } catch (e) { throw new HttpError(401, e.message); }
-    if (!can(user.role, 'pos')) throw new HttpError(403, 'هذا الحساب لا يملك صلاحية الطلبات');
+    const kds = b.kds === true; // جلسة شاشة المطبخ: لا تصل إلا لمسارات /api/kds/
+    if (!can(user.role, kds ? 'kitchen.view' : 'pos')) throw new HttpError(403, kds ? 'هذا الحساب لا يملك صلاحية شاشة المطبخ' : 'هذا الحساب لا يملك صلاحية الطلبات');
     const token = crypto.randomBytes(32).toString('base64url');
-    sessions.set(token, { userId: user.id, exp: Date.now() + SESSION_MS });
+    sessions.set(token, { userId: user.id, exp: Date.now() + SESSION_MS, kds });
     return { token, user: { id: user.id, name: user.name, role: user.role } };
   }
 
   const s = authenticate(req);
   if (!s) throw new HttpError(401, 'انتهت الجلسة، سجّل الدخول من جديد');
   const user = s.user;
+  if (s.kds && !p.startsWith('/api/kds/') && p !== '/api/logout') throw new HttpError(403, 'هذه الجلسة لشاشة المطبخ فقط');
+
+  if (p === '/api/kds/board' && m === 'GET') {
+    need(user, 'kitchen.view');
+    const st = String(u.searchParams.get('station') || '').slice(0, 64);
+    return { now: new Date().toISOString(), stations: kitchen.stations().map((x) => ({ id: x.id, name: x.name })), tickets: kitchen.board(st || undefined) };
+  }
+  if (p === '/api/alerts' && m === 'GET') return { alerts: kitchen.alertsFor(user) };
+  const al = /^\/api\/alerts\/(\d+)\/ack$/.exec(p);
+  if (al && m === 'POST') { kitchen.ackAlert(Number(al[1])); return { ok: true }; }
+  if (p === '/api/kds/soldout' && m === 'POST') {
+    need(user, 'kitchen.view');
+    const b = await readBody(req);
+    if (typeof b.itemId !== 'string' || b.itemId.length > 64 || typeof b.soldOut !== 'boolean' || (b.variantId != null && typeof b.variantId !== 'string')) throw new HttpError(400, 'بيانات غير صالحة');
+    return auth.runAs(user, () => kitchen.setSoldOut(b.itemId, b.variantId || null, b.soldOut));
+  }
+  const kt = /^\/api\/kds\/tickets\/(\d+)\/([a-z]+)$/.exec(p);
+  if (kt && m === 'POST') {
+    need(user, 'kitchen.view');
+    if (kt[2] === 'reject') {
+      const b = await readBody(req);
+      if (!Number.isInteger(b.index) || typeof b.reason !== 'string') throw new HttpError(400, 'بيانات غير صالحة');
+      try { return auth.runAs(user, () => kitchen.rejectItem(Number(kt[1]), b.index, b.reason)); } catch (e) { throw new HttpError(400, e.message); }
+    }
+    if (!ID.test(kt[1]) || !KDS_ACTIONS.includes(kt[2])) throw new HttpError(400, 'إجراء غير صالح');
+    return { ticket: auth.runAs(user, () => kitchen.bump(Number(kt[1]), kt[2])) };
+  }
 
   if (p === '/api/logout' && m === 'POST') { sessions.delete(s.token); return { ok: true }; }
   if (p === '/api/menu' && m === 'GET') return publicMenu();
@@ -241,7 +283,11 @@ async function route(req, res) {
 async function handler(req, res) {
   try {
     const out = await route(req, res);
-    if (out instanceof Binary) {
+    if (out instanceof Page) {
+      res.writeHead(200, { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store', 'Content-Type': out.type, 'Content-Length': out.buf.length, 'X-Frame-Options': 'DENY',
+        'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" });
+      res.end(out.buf);
+    } else if (out instanceof Binary) {
       res.writeHead(200, { 'X-Content-Type-Options': 'nosniff', 'Content-Type': out.type, 'Content-Length': out.buf.length, 'Cache-Control': 'private, max-age=86400', ETag: `"${out.tag}"`, 'Content-Security-Policy': "default-src 'none'" });
       res.end(out.buf);
     } else send(res, 200, out);

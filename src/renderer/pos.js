@@ -28,6 +28,20 @@ async function viewPos() {
   try { LOY = await api.loyaltyGet(); } catch { LOY = { enabled: false }; }
   try { P.dcfg = await api.deliveryConfig(); } catch { P.dcfg = { baseFeeCents: 0, zones: [] }; }
   drawPos();
+  clearInterval(posSoldTimer); posSoldTimer = setInterval(refreshSoldOut, 8000);
+}
+// المطبخ قد يوقف صنفاً أثناء العمل: نقارن حالة «نفد» دورياً ونحدّث البلاطات بلا إعادة فتح الشاشة
+let posSoldTimer = null;
+const soldSig = (m) => m.items.map((i) => (i.soldOut ? i.id : '') + (i.variants || []).map((v) => (v.soldOut ? v.id : '')).join('')).join('|');
+async function refreshSoldOut() {
+  if (!document.querySelector('.pos') || document.querySelector('dialog[open]')) { if (!document.querySelector('.pos')) clearInterval(posSoldTimer); return; }
+  try {
+    const m = await api.menuGet();
+    if (soldSig(m) === soldSig(PM)) return;
+    const was = new Set(PM.items.filter(tileOut).map((i) => i.id)), now = m.items.filter((i) => tileOut(i) && !was.has(i.id)).map((i) => i.name);
+    PM = m; readFields(); drawPos();
+    if (now.length) flash('نفد: ' + now.join('، '));
+  } catch { /* الشبكة/الصلاحية: نعيد المحاولة في الدورة التالية */ }
 }
 
 // لون شريط البلاطة = لون تصنيف الصنف (إن كان صالحاً)
@@ -143,8 +157,9 @@ function pickItem(item) {
   };
 }
 
-// تقليل صنف أُرسل للمطبخ لا يُبلغ المطبخ — ننبّه الكاشير
-const okReduce = (l, to) => !(l.sent && to < l.sent) || confirm('هذا الصنف أُرسل للمطبخ بالفعل، وتقليله لن يُبلغ المطبخ. متابعة؟');
+// تقليل صنف أُرسل للمطبخ: عند حفظ الطلب تصل المطبخ تذكرة «ملغاة» (وتُطبع إن فُعّلت الطباعة التلقائية)
+const okReduce = (l, to) => !(l.sent && to < l.sent) || confirm('هذا الصنف أُرسل للمطبخ بالفعل. سيُبلَّغ المطبخ بالإلغاء عند حفظ الطلب. متابعة؟');
+const cancelFlash = (o) => { if (o?.cancelNotified?.length) flash(`أُبلغ المطبخ بالإلغاء: ${o.cancelNotified.join('، ')}${o.printErrors?.length ? ' — تنبيه طباعة: ' + o.printErrors[0] : ''}`); };
 function drawCart() {
   $('pLines').innerHTML = P.cart.map((l, i) => `<div class="ln"><div class="top"><b>${esc(l.name)}</b>
     <span class="qty"><button class="sm sec" data-m="${i}">−</button> ${l.qty} <button class="sm sec" data-p="${i}">+</button></span>
@@ -194,7 +209,7 @@ async function checkout(payNow) {
   if (!P.cart.length) return ($('pErr').textContent = 'السلة فارغة');
   try {
     const o = await api.orderSave(payload());
-    P.orderId = o.id; P.number = o.number;
+    P.orderId = o.id; P.number = o.number; cancelFlash(o);
     if (payNow) return payDialog(o);
     await afterOrder(); flash(`تم حفظ الطلب #${o.number}`);
   } catch (e) { $('pErr').textContent = errMsg(e); }
@@ -205,8 +220,10 @@ async function sendKitchenNow() {
   try {
     const o = await api.orderSave(payload());
     P.orderId = o.id; P.number = o.number;
-    const r = await api.kitchenSend(o.id);
-    await afterOrder();
+    let r;
+    try { r = await api.kitchenSend(o.id); }
+    catch (e) { if (o.cancelNotified?.length && /لا توجد أصناف/.test(errMsg(e))) { await afterOrder(); return cancelFlash(o); } throw e; } // تقليل فقط بلا أصناف جديدة
+    await afterOrder(); cancelFlash(o);
     flash(`أُرسل للمطبخ: ${r.tickets.map((t) => t.stationName).join('، ')}${r.printErrors.length ? ' — تنبيه طباعة: ' + r.printErrors[0] : ''}`);
   } catch (e) { $('pErr').textContent = errMsg(e); }
 }
@@ -315,7 +332,7 @@ function voidDialog(id, status) {
     <div id="vErr" class="err"></div><button class="danger" id="vOk">تأكيد الإلغاء</button><button class="sec" id="vNo">رجوع</button>`);
   d.querySelector('#vNo').onclick = dlgClose;
   d.querySelector('#vOk').onclick = async () => {
-    try { await api.orderVoid(id, d.querySelector('#vReason').value); if (P?.orderId === id) resetPos(); dlgClose(); viewOrders(); }
+    try { const vr = await api.orderVoid(id, d.querySelector('#vReason').value); if (P?.orderId === id) resetPos(); dlgClose(); viewOrders(); if (vr?.printErrors?.length) flash('تنبيه: لم تُطبع ورقة الإلغاء للمطبخ — ' + vr.printErrors[0]); }
     catch (e) { d.querySelector('#vErr').textContent = errMsg(e); }
   };
 }

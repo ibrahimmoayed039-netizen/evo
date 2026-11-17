@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   tablesFloor: call('tables:floor'), orderBill: call('orders:bill'), tableSave: call('tables:save'), tableDelete: call('tables:delete'),
   orderMove: call('orders:move'), orderMerge: call('orders:merge'), orderSplit: call('orders:split'),
   kitchenStations: call('kitchen:stations'), kitchenStationSave: call('kitchen:stationSave'), kitchenStationDelete: call('kitchen:stationDelete'),
-  kitchenSend: call('kitchen:send'), kitchenBoard: call('kitchen:board'), kitchenBump: call('kitchen:bump'), kitchenReprint: call('kitchen:reprint'),
+  kitchenSend: call('kitchen:send'), kitchenBoard: call('kitchen:board'), kitchenBump: call('kitchen:bump'), kitchenSoldOut: call('kitchen:soldOut'), kitchenReject: call('kitchen:reject'), openKdsWindow: call('app:kdsWindow'), kitchenReprint: call('kitchen:reprint'),
   shiftCurrent: call('shift:current'), shiftOpen: call('shift:open'), shiftMove: call('shift:move'), shiftClose: call('shift:close'),
   shiftRequire: call('shift:require'), shiftList: call('shift:list'), shiftGet: call('shift:get'), shiftHtml: call('shift:html'), shiftPrint: call('shift:print'),
   reportSales: call('report:sales'), reportExport: call('report:export'), reportDeep: call('report:deep'), reportExportDeep: call('report:exportDeep'),

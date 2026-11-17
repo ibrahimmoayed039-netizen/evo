@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>شاشة المطبخ</title>
+<style>
+*{box-sizing:border-box}
+:root{--bg:#111827;--card:#1f2937;--bd:#374151;--tx:#f3f4f6;--mu:#9ca3af;--info:#38bdf8;--warn:#fbbf24;--ok:#34d399;--bad:#f87171}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:18px/1.4 Tahoma,Cairo,Arial,sans-serif}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:12px 18px;background:#0f766e;color:#fff;min-height:48px}
+button.sec{background:#374151}button:disabled{opacity:.5}
+select,input{font:inherit;padding:12px;border-radius:10px;border:1px solid var(--bd);background:#0b1220;color:var(--tx);width:100%}
+#login{max-width:360px;margin:8vh auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+#login h1{margin:0 0 6px;text-align:center}
+.err{color:var(--bad);min-height:1.4em}.muted{color:var(--mu)}
+#bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;background:#0b1220;position:sticky;top:0;z-index:5;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+#bar .tabs{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+#bar .tabs button{background:#374151;padding:8px 16px;min-height:40px}#bar .tabs button.on{background:#0f766e}
+#net{padding:6px 12px;background:var(--bad);color:#000;text-align:center;font-weight:bold}
+#board{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:12px;align-items:start}
+.kt{background:var(--card);border:3px solid var(--info);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.kt.preparing{border-color:var(--warn)}.kt.ready{border-color:var(--ok)}.kt.cancelled{border-color:var(--bad);background:#3b1d1d}
+.kt.warn .tm{color:var(--warn)}.kt.late .tm{color:var(--bad)}
+.kh{display:flex;justify-content:space-between;gap:8px;align-items:baseline;border-bottom:1px solid var(--bd);padding-bottom:6px}
+.kh b{font-size:1.3em}.tm{font-weight:bold;font-size:1.2em}
+.ks{color:var(--mu);font-size:.85em}
+.xx{background:var(--bad);color:#000;text-align:center;font-weight:bold;border-radius:8px;padding:6px}
+.kt ul{margin:0;padding:0;list-style:none}.kt li{padding:6px 0;border-bottom:1px dashed var(--bd);font-size:1.15em}
+.kt li small{display:block;color:var(--mu);font-size:.8em}.kt li small.nt{color:var(--warn);font-weight:bold}
+.ba{display:flex;gap:8px;flex-wrap:wrap}.ba button{flex:1}.ba button.sm{flex:0 0 auto;background:#374151}
+.so{min-height:32px;padding:2px 10px;margin-inline-start:8px;font-size:.7em;background:#991b1b}.so.on{background:#374151}
+.ov{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}.bx{background:var(--card);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:280px;max-width:420px;width:100%}.bx h3{margin:0}.kt s{opacity:.7}
+.empty{grid-column:1/-1;text-align:center;color:var(--mu);padding:40px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div id="login" class="hide">
+  <h1>شاشة المطبخ</h1>
+  <label for="who">الاسم</label><select id="who"></select>
+  <label for="pin">الرمز السري</label><input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8">
+  <div id="lerr" class="err"></div>
+  <button id="go">دخول</button>
+</div>
+<div id="app" class="hide">
+  <div id="net" class="hide">انقطع الاتصال بالكاشير… تُعاد المحاولة تلقائياً</div>
+  <div id="bar"><div class="tabs" id="tabs"></div><span class="muted" id="who2"></span><button class="sec" id="fs">ملء الشاشة</button><button class="sec" id="out">خروج</button></div>
+  <div id="board"></div>
+</div>
+<script src="/kds.js"></script>
+</body>
+</html>

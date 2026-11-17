@@ -17,11 +17,16 @@ async function viewKds() {
   KD.seen = new Set(); KD.first = true;
   $('content').innerHTML = `<h2>المطبخ</h2>
    <div class="tabs"><button data-ks="" class="${KD.station ? '' : 'on'}">كل المحطات</button>${stations.map((s) => `<button data-ks="${esc(s.id)}" class="${KD.station === s.id ? 'on' : ''}">${esc(s.name)}</button>`).join('')}
-    ${can('kitchen') ? '<button class="sec" id="kdMgr">إدارة المحطات</button>' : ''}</div>
+    ${can('kitchen') ? '<button class="sec" id="kdMgr">إدارة المحطات</button>' : ''}
+    ${KDS_ONLY ? '<button class="sec" id="kdClose">إغلاق هذه النافذة</button>' : '<button class="sec" id="kdWin" title="تفتح ملء الشاشة على الشاشة الثانية إن وُجدت">نافذة مستقلة (شاشة ثانية)</button>'}</div>
    ${stations.length ? '' : '<div class="card">لم تُعرَّف محطات بعد. ' + (can('kitchen') ? 'اضغط «إدارة المحطات» لإضافة أول محطة، وبعدها يظهر زر «إرسال للمطبخ» في الكاشير.' : 'اطلب من المدير إضافتها.') + '</div>'}
    <div id="kdBoard" class="kds"></div><div id="kdErr" class="err"></div>`;
   document.querySelectorAll('[data-ks]').forEach((b) => (b.onclick = () => { KD.station = b.dataset.ks; viewKds(); }));
   if ($('kdMgr')) $('kdMgr').onclick = () => stationsDialog(stations);
+  if ($('kdClose')) $('kdClose').onclick = () => window.close();
+  if ($('kdWin')) $('kdWin').onclick = async () => {
+    try { const r = await api.openKdsWindow(); flash(r.reused ? 'نافذة المطبخ مفتوحة بالفعل' : r.external ? 'فُتحت شاشة المطبخ على الشاشة الثانية' : 'لا توجد شاشة ثانية: فُتحت في نافذة مستقلة يمكنك سحبها'); } catch (e) { $('kdErr').textContent = errMsg(e); }
+  };
   await refreshKds();
   clearInterval(KD.timer); KD.timer = setInterval(refreshKds, 5000);
 }
@@ -40,11 +45,27 @@ async function refreshKds() {
     return `<div class="kt ${t.status} ${m >= 20 ? 'late' : m >= 10 ? 'warn' : ''}" data-tk="${t.id}">
      <div class="kh"><b>#${t.orderNumber}${t.batch > 1 ? ` · دفعة ${t.batch}` : ''}</b><span>${esc(t.type)}${t.tableLabel ? ' ' + esc(t.tableLabel) : ''}</span><span class="tm">${m} د</span></div>
      ${KD.station ? '' : `<div class="ks">${esc(t.stationName)}</div>`}${t.status === 'cancelled' ? '<div class="err"><b>ملغاة</b></div>' : ''}
-     <ul>${t.items.map((i) => `<li><b>${i.qty}×</b> ${esc(i.name)}${i.mods.length ? `<small>+ ${esc(i.mods.join('، '))}</small>` : ''}${i.note ? `<small><b>** ${esc(i.note)}</b></small>` : ''}</li>`).join('')}</ul>
+     <ul>${t.items.map((i, n) => `<li class="${i.rejected ? 'rj' : ''}"><b>${i.qty}×</b> ${i.rejected ? `<s>${esc(i.name)}</s> <small class="err"><b>ملغى: ${esc(i.rejected.reason)}</b></small>` : esc(i.name)}${i.itemId && !i.rejected && t.status !== 'cancelled' && can('kitchen.view') ? ` <button class="sm ${i.soldOut ? 'sec' : 'danger'} so" data-so="${t.id}:${n}">${i.soldOut ? 'متوفر' : 'نفد'}</button>` : ''}${i.itemId && !i.rejected && ['new', 'preparing'].includes(t.status) && can('kitchen.view') ? ` <button class="sm sec" data-rj="${t.id}:${n}">إلغاء</button>` : ''}${i.soldOut ? ' <small class="err"><b>نفد في المنيو</b></small>' : ''}${i.mods.length ? `<small>+ ${esc(i.mods.join('، '))}</small>` : ''}${i.note ? `<small><b>** ${esc(i.note)}</b></small>` : ''}</li>`).join('')}</ul>
      <div class="ba">${KD_ACTIONS[t.status].map(([a, l]) => `<button class="${a === 'back' ? 'sec sm' : ''}" data-a="${a}" data-id="${t.id}">${l}</button>`).join('')}<button class="sec sm" data-rp="${t.id}" title="إعادة طباعة">🖨</button></div></div>`;
   }).join('') || '<div class="muted">لا توجد تذاكر</div>';
   document.querySelectorAll('#kdBoard [data-a]').forEach((b) => (b.onclick = async () => {
     try { await api.kitchenBump(+b.dataset.id, b.dataset.a); refreshKds(); } catch (e) { $('kdErr').textContent = errMsg(e); }
+  }));
+  document.querySelectorAll('#kdBoard [data-so]').forEach((b) => (b.onclick = async () => {
+    const [tid, n] = b.dataset.so.split(':'), i = rows.find((x) => x.id === +tid)?.items[+n];
+    if (!i) return;
+    if (!i.soldOut && !confirm(`إيقاف «${i.name}» في المنيو؟ لن يستطيع الكاشير ولا النادل إضافته حتى تعيده متوفراً.`)) return;
+    try { await api.kitchenSoldOut(i.itemId, i.variantId || null, !i.soldOut); flash(i.soldOut ? 'أُعيد الصنف للمنيو' : 'أُوقف الصنف في المنيو'); refreshKds(); } catch (e) { $('kdErr').textContent = errMsg(e); }
+  }));
+  document.querySelectorAll('#kdBoard [data-rj]').forEach((b) => (b.onclick = () => {
+    const [tid, n] = b.dataset.rj.split(':'), t = rows.find((x) => x.id === +tid), i = t?.items[+n];
+    if (!i) return;
+    const d = dlgOpen(`<h3>إلغاء «${esc(i.name)}» (${i.qty}×)</h3><div class="muted">يُحذف من الفاتورة ويصل النادل تنبيه بالسبب${t.tableLabel ? ' (' + esc(t.tableLabel) + ')' : ''}.</div>
+      <div class="ba" style="flex-direction:column;margin-top:10px">${['نفد', 'خطأ في الطلب', 'لا يمكن تحضيره', 'سبب آخر'].map((r) => `<button data-why="${esc(r)}">${esc(r)}</button>`).join('')}<button class="sec" id="rjX">تراجع</button></div><div id="rjErr" class="err"></div>`);
+    d.querySelector('#rjX').onclick = dlgClose;
+    d.querySelectorAll('[data-why]').forEach((w) => (w.onclick = async () => {
+      try { const r = await api.kitchenReject(t.id, +n, w.dataset.why); dlgClose(); flash(r.orderVoided ? 'أُلغي الصنف وكل الطلب (كان آخر صنف)' : 'أُلغي الصنف وأُبلغ النادل'); refreshKds(); } catch (e) { d.querySelector('#rjErr').textContent = errMsg(e); }
+    }));
   }));
   document.querySelectorAll('#kdBoard [data-rp]').forEach((b) => (b.onclick = async () => {
     try { await api.kitchenReprint(+b.dataset.rp); flash('أُرسلت للطابعة'); } catch (e) { $('kdErr').textContent = 'فشلت الطباعة: ' + errMsg(e); }

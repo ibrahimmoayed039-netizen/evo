@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Menu } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const db = require('./db');
@@ -19,11 +19,60 @@ const waiterApi = require('./waiter-api');
 const { buildReceiptHTML, buildKotHTML, buildShiftHTML, buildGiftHTML, buildQrSheetHTML } = require('./receipt');
 const { printSystem, printEscPos } = require('./printing');
 
-let mainWin;
-function createWindow() {
-  mainWin = new BrowserWindow({
-    width: 1200, height: 800,
+let mainWin, kdsWin = null;
+
+// نافذة مطبخ مستقلة: تُفتح ملء الشاشة على الشاشة الثانية إن وُجدت (HDMI/تلفزيون)، وإلا نافذة عادية على الشاشة الرئيسية.
+// تشارك جلسة الدخول مع النافذة الرئيسية (العملية الرئيسية واحدة) وتعرض شاشة المطبخ فقط.
+function openKdsWindow() {
+  if (kdsWin && !kdsWin.isDestroyed()) { kdsWin.focus(); return { external: !!kdsWin.__external, reused: true }; }
+  const primary = screen.getPrimaryDisplay(), ext = screen.getAllDisplays().find((d) => d.id !== primary.id), b = (ext || primary).workArea;
+  kdsWin = new BrowserWindow({
+    x: b.x, y: b.y, width: ext ? b.width : Math.min(1100, b.width), height: ext ? b.height : Math.min(720, b.height),
+    fullscreen: !!ext, autoHideMenuBar: true, backgroundColor: '#EEF1F0', title: 'شاشة المطبخ',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  kdsWin.__external = !!ext;
+  kdsWin.setMenuBarVisibility(false);
+  kdsWin.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { kds: '1' } });
+  kdsWin.on('closed', () => { kdsWin = null; });
+  return { external: !!ext, reused: false };
+}
+
+function createWindow() {
+  // حجم النافذة يتبع مساحة الشاشة المتاحة (بدون شريط المهام) بدل رقم ثابت
+  const wa = screen.getPrimaryDisplay().workArea;
+  mainWin = new BrowserWindow({
+    x: wa.x, y: wa.y,
+    width: Math.min(1366, wa.width), height: Math.min(860, wa.height),
+    minWidth: 900, minHeight: 600,
+    show: false,
+    autoHideMenuBar: true,           // إخفاء File/Edit/View (يظهر مؤقتاً بزر Alt)
+    backgroundColor: '#EEF1F0',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  Menu.setApplicationMenu(null);     // إزالة القائمة نهائياً من نسخة الإنتاج
+  mainWin.setMenuBarVisibility(false);
+  mainWin.maximize();                // يملأ الشاشة
+  mainWin.once('ready-to-show', () => mainWin.show());
+  mainWin.on('closed', () => { if (kdsWin && !kdsWin.isDestroyed()) kdsWin.close(); }); // إغلاق الرئيسية يغلق شاشة المطبخ معها
+
+  // تكبير/تصغير تلقائي: التصميم الأساسي 1366x768. الشاشات الأصغر تُصغَّر والأكبر تُكبَّر (بين 0.8 و 1.3)
+  const fit = () => {
+    if (!mainWin || mainWin.isDestroyed()) return;
+    const [w, h] = mainWin.getContentSize();
+    const f = Math.max(0.8, Math.min(1.3, Math.min(w / 1366, h / 768)));
+    mainWin.webContents.setZoomFactor(Math.round(f * 100) / 100);
+  };
+  mainWin.webContents.on('did-finish-load', fit);
+  mainWin.on('resize', fit);
+  mainWin.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+  // Ctrl + / Ctrl - / Ctrl 0 للتحكم اليدوي بالحجم
+  mainWin.webContents.on('before-input-event', (e, i) => {
+    if (i.type !== 'keyDown' || !i.control) return;
+    const z = mainWin.webContents.getZoomFactor();
+    if (i.key === '=' || i.key === '+') { mainWin.webContents.setZoomFactor(Math.min(1.6, z + 0.1)); e.preventDefault(); }
+    else if (i.key === '-') { mainWin.webContents.setZoomFactor(Math.max(0.6, z - 0.1)); e.preventDefault(); }
+    else if (i.key === '0') { fit(); e.preventDefault(); }
   });
   mainWin.loadFile(path.join(__dirname, '../renderer/index.html'));
 }
@@ -79,13 +128,25 @@ handle('menu:deleteGroup', 'menu', (id) => menu.deleteGroup(id));
 
 handle('orders:quote', 'pos', (p) => orders.quote(p));
 // customerId: ربط العميل بالطلب (null لإزالته). غير المُرسَل يُبقي الربط كما هو
-handle('orders:save', 'pos', (p) => {
+handle('orders:save', 'pos', async (p) => {
   const o = orders.save(p);
   if (p.customerId !== undefined) crm.attach(o.id, p.customerId || null);
   else if (o.type === 'delivery' && p.customer?.phone && !crm.customerOf(o.id)) { // ربط تلقائي بعميل مسجّل بنفس جوال التوصيل
     const c = crm.findByPhone(p.customer.phone); if (c) crm.attach(o.id, c.id);
   }
-  return orders.get(o.id);
+  const out = orders.get(o.id);
+  // أصناف أُرسلت ثم قُلّلت/حُذفت: تذكرة «ملغاة» على شاشة المحطة + ورقة إلغاء مطبوعة (إن فُعّلت الطباعة التلقائية)
+  if (o.removedSent?.length && kitchen.enabled()) {
+    out.cancelNotified = [], out.printErrors = [];
+    try {
+      for (const t of kitchen.cancelItems(o.id, o.removedSent)) {
+        out.cancelNotified.push(t.stationName);
+        const st = kitchen.station(t.stationId);
+        if (st?.autoPrint) { try { await printKot(t); } catch (e) { out.printErrors.push(`${st.name}: ${e.message}`); } }
+      }
+    } catch (e) { auth.audit('kitchen_error', e.message); }
+  }
+  return out;
 });
 // طباعة تذكرة مطبخ على طابعة محطتها (صامتة)
 async function printKot(t) {
@@ -117,14 +178,25 @@ handle('kitchen:stationDelete', 'kitchen', (id) => kitchen.deleteStation(id));
 handle('kitchen:send', 'pos', (orderId) => sendToKitchen(orderId));
 handle('kitchen:board', 'kitchen.view', (stationId) => kitchen.board(stationId));
 handle('kitchen:bump', 'kitchen.view', (id, action) => kitchen.bump(id, action));
+handle('app:kdsWindow', 'kitchen.view', () => openKdsWindow());
+handle('kitchen:reject', 'kitchen.view', (id, index, reason) => kitchen.rejectItem(id, index, reason));
+handle('kitchen:soldOut', 'kitchen.view', (itemId, variantId, v) => kitchen.setSoldOut(itemId, variantId || null, v));
 handle('kitchen:reprint', ['pos', 'kitchen.view'], (id) => printKot(kitchen.ticket(id)));
 handle('orders:get', 'pos', (id) => orders.get(id));
 handle('orders:list', 'pos', (f) => orders.list(f));
-handle('orders:void', 'pos', (id, reason) => {
+handle('orders:void', 'pos', async (id, reason) => {
   const was = orders.get(id).status;
+  // التذاكر الحية قبل الإلغاء: هذه التي يجب إبلاغ المطبخ بإيقافها
+  const live = kitchen.enabled() ? kitchen.board().filter((t) => t.orderId === id && ['new', 'preparing', 'ready'].includes(t.status)) : [];
   const o = orders.voidOrder(id, reason);
   if (was === 'paid') { try { crm.onVoid(id); } catch (e) { auth.audit('crm_error', `#${o.number}: ${e.message}`); } }
-  return o;
+  // ورقة إلغاء على طابعة كل محطة لها طباعة تلقائية (فشل الطباعة لا يوقف الإلغاء)
+  const printErrors = [];
+  for (const t of live) {
+    const st = kitchen.station(t.stationId);
+    if (st?.autoPrint) { try { await printKot({ ...t, status: 'cancelled' }); } catch (e) { printErrors.push(`${st.name}: ${e.message}`); } }
+  }
+  return { ...o, printErrors };
 });
 handle('tables:floor', 'tables', () => tables.floor());
 handle('tables:save', 'tables.manage', (t) => tables.save(t));

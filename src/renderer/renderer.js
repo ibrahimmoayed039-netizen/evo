@@ -3,6 +3,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const errMsg = (e) => String(e.message || e).replace(/^.*Error: /, '');
 const ROLE = { owner: 'مالك', manager: 'مدير فرع', cashier: 'كاشير', accountant: 'محاسب', kitchen: 'مطبخ', waiter: 'نادل' };
 let me = null;
+const KDS_ONLY = new URLSearchParams(location.search).has('kds'); // نافذة المطبخ المستقلة (index.html?kds=1)
 
 const show = (id) => { for (const x of ['setup', 'login', 'app']) $(x).classList.toggle('hide', x !== id); };
 
@@ -71,7 +72,13 @@ const VIEWS = [
 ];
 const can = (p) => me.perms.includes(p);
 
+// نافذة المطبخ المستقلة: شاشة المطبخ وحدها بلا قائمة جانبية (لشاشة ثانية/تلفزيون)
+function enterKdsOnly() {
+  show('app'); document.querySelector('#app nav').classList.add('hide'); document.body.classList.add('kds-only');
+  document.title = 'شاشة المطبخ'; viewKds();
+}
 function enterApp() {
+  if (KDS_ONLY && can('kitchen.view')) return enterKdsOnly();
   show('app'); resetPos();
   $('navWho').textContent = `${me.name} — ${ROLE[me.role]}`;
   const items = VIEWS.filter((v) => can(v.perm));
