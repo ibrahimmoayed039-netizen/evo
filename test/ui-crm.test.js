@@ -4,7 +4,7 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts');
 const tables = require(S + 'tables'), crm = require(S + 'crm'), res = require(S + 'reservations');
-db.init(); orders.init(':memory:'); shifts.init(); crm.init(); res.init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); crm.init(); res.init();
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 crm.setLoyalty({ enabled: true, earnPerRiyal: 1, pointValueCents: 5 });
 const cust = crm.save({ name: 'سارة <b>', phone: '0501234567' }); crm.adjustPoints(cust.id, 40, 'ترحيب');
@@ -35,7 +35,7 @@ const ctx = {
   },
 };
 vm.createContext(ctx);
-for (const f of ['pos.js', 'crm.js', 'reservations.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer', f), 'utf8'), ctx, { filename: f });
+for (const f of ['currency.js', 'pos.js', 'crm.js', 'reservations.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer', f), 'utf8'), ctx, { filename: f });
 // pos.js يعرّف dlgOpen/dlgClose/flash الحقيقية؛ نعيد استبدالها بنسخ تلتقط HTML
 ctx.dlgOpen = (h) => { dlg.html = h; return dlgEl; }; ctx.dlgClose = () => {}; ctx.flash = () => {};
 const clean = (h, m) => ok(h.length > 50 && !/undefined|NaN|\[object/.test(h), m + ' بلا undefined/NaN');
@@ -46,12 +46,12 @@ const tab = async (t) => { vm.runInContext(`CRM.tab='${t}'`, ctx); await ctx.vie
   let h = await tab('cust');
   ok(h.includes('سارة &lt;b&gt;') && !h.includes('<b>سارة'), 'هروب HTML لاسم العميل'); ok(h.includes('0501234567') && h.includes('>40<'), 'الجوال والنقاط'); clean(h, 'تبويب العملاء');
   h = await tab('gift');
-  ok(h.includes(card.code) && h.includes('100.00') && h.includes('نشط') && h.includes('gIssue'), 'قائمة الكروت ونموذج الإصدار'); clean(h, 'تبويب الكروت');
-  h = await tab('loy'); ok(h.includes('lySave') && h.includes('value="5"'), 'إعدادات الولاء'); clean(h, 'تبويب الولاء');
+  ok(h.includes(card.code) && h.includes('100') && h.includes('نشط') && h.includes('gIssue'), 'قائمة الكروت ونموذج الإصدار'); clean(h, 'تبويب الكروت');
+  h = await tab('loy'); ok(h.includes('lySave') && h.includes('value="0.05"'), 'إعدادات الولاء'); clean(h, 'تبويب الولاء');
   await ctx.custDetails(cust.id); ok(dlg.html.includes('ترحيب') && dlg.html.includes('+40') && dlg.html.includes('تعديل النقاط'), 'تفاصيل العميل وحركة النقاط'); clean(dlg.html, 'تفاصيل العميل');
   await ctx.giftDetails(card.code); ok(dlg.html.includes('إصدار') && dlg.html.includes('هدية &lt;i&gt;') && dlg.html.includes('إلغاء الكرت'), 'تفاصيل الكرت'); clean(dlg.html, 'تفاصيل الكرت');
   h = await tab('gift');
-  ok(h.includes('التزامات الكروت') && h.includes('100.00'), 'بطاقة التزامات الكروت في تبويب الكروت');
+  ok(h.includes('التزامات الكروت') && h.includes('100'), 'بطاقة التزامات الكروت في تبويب الكروت');
   await ctx.custDetails(cust.id); ok(dlg.html.includes('cdMerge') && dlg.html.includes('دمج في عميل آخر'), 'زر دمج العميل في التفاصيل');
   ok(typeof ctx.showVoucher === 'function' && typeof ctx.seatToPos === 'function', 'دوال القسيمة والإجلاس موجودة');
   // الإجلاس يفتح الكاشير بالطاولة والعميل
@@ -69,7 +69,7 @@ const tab = async (t) => { vm.runInContext(`CRM.tab='${t}'`, ctx); await ctx.vie
   // نافذة الدفع: كرت هدية ونقاط الولاء تظهر عند وجود عميل
   vm.runInContext(`P = freshPos(); P.crm = { id: '${cust.id}', name: 'سارة', phone: '0501234567', points: 40 }; LOY = ${JSON.stringify(crm.loyalty())};`, ctx);
   ctx.payDialog({ id: 1, number: 1001, totalCents: 1150 });
-  ok(dlg.html.includes('كرت هدية') && dlg.html.includes('نقاط الولاء') && dlg.html.includes('qPts') && dlg.html.includes('2.00'), 'خيارات الدفع بالكرت والنقاط (40 نقطة = 2.00)'); clean(dlg.html, 'نافذة الدفع');
+  ok(dlg.html.includes('كرت هدية') && dlg.html.includes('نقاط الولاء') && dlg.html.includes('qPts') && dlg.html.includes('2 د.ع'), 'خيارات الدفع بالكرت والنقاط (40 نقطة = 2 د.ع)'); clean(dlg.html, 'نافذة الدفع');
   vm.runInContext(`P.crm = null`, ctx); ctx.payDialog({ id: 1, number: 1001, totalCents: 1150 });
   ok(dlg.html.includes('كرت هدية') && !dlg.html.includes('نقاط الولاء') && !dlg.html.includes('qPts'), 'بلا عميل: كرت فقط بلا نقاط');
   done();

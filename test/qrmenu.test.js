@@ -4,7 +4,7 @@ const net = require('net');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), tables = require(S + 'tables'), orders = require(S + 'orders');
 const qrmenu = require(S + 'qrmenu'), qr = require(S + 'qr'), { buildQrSheetHTML } = require(S + 'receipt'), { can } = require(S + 'permissions');
-db.init(); orders.init(':memory:');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:');
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 menu.saveCategory({ name: 'مشروبات', sort: 1 }); menu.saveCategory({ name: 'فارغ', sort: 2 }); menu.saveCategory({ name: 'حلويات', sort: 3 });

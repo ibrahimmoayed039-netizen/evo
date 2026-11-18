@@ -3,7 +3,7 @@ const { ok, eq, done } = require('./harness');
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts'), reports = require(S + 'reports');
-db.init(); orders.init(':memory:'); shifts.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'مشروبات', sort: 1 }); const cat = db.get().categories[0].id;
 menu.saveItem({ categoryId: cat, name: 'قهوة <b>', price: 10 }); menu.saveItem({ categoryId: cat, name: 'ماء', price: 1 }); menu.saveItem({ categoryId: cat, name: 'كيك', price: 50 });
 const [coffee, water, cake] = db.get().items.map((i) => i.id), ymd = reports.ymd;

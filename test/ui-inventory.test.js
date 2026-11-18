@@ -3,7 +3,7 @@ const { ok, eq, done } = require('./harness');
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts'), inv = require(S + 'inventory');
-db.init(); orders.init(':memory:'); shifts.init(); inv.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); inv.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'مشروبات', sort: 1 }); menu.saveItem({ categoryId: db.get().categories[0].id, name: 'لاتيه <i>', price: 10 });
 const latte = db.get().items[0].id;
 const beans = inv.save({ name: 'بن', unit: 'g', qty: 1500, minQty: 2000, unitCost: 0.05 }).id;
@@ -23,7 +23,7 @@ const ctx = {
   api: { invList: async () => inv.list(), menuGet: async () => menu.get(), poList: async () => inv.poList(), invMoves: async (id, n) => inv.moves(id, n) },
 };
 vm.createContext(ctx);
-for (const f of ['shift.js', 'inventory.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer', f), 'utf8'), ctx, { filename: f });
+for (const f of ['currency.js', 'shift.js', 'inventory.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer', f), 'utf8'), ctx, { filename: f });
 const clean = (h, m) => ok(h.length > 50 && !/undefined|NaN|\[object/.test(h), m + ' بلا undefined/NaN');
 const tab = async (t) => { vm.runInContext(`INV.tab='${t}'`, ctx); await ctx.viewInventory(); return els.invBody.innerHTML; };
 
@@ -43,5 +43,11 @@ const tab = async (t) => { vm.runInContext(`INV.tab='${t}'`, ctx); await ctx.vie
   ctx.recipeDialog(db.get().items[0]); ok(dlg.html.includes('وصفة:') && dlg.html.includes('2.90'), 'حوار الوصفة بالتكلفة');
   ctx.adjDialog(I.ingredients[0], 'waste'); ok(dlg.html.includes('السبب (إلزامي)'), 'حوار الهدر');
   ctx.poDialog(inv.poList()[0], I); clean(dlg.html, 'حوار أمر الشراء'); ctx.receiveDialog(inv.poList()[0]); ok(dlg.html.includes('استلام أمر شراء #1'), 'حوار الاستلام');
+  // ميزات قائمة المخزون الجديدة
+  h = await tab('stock'); ok(h.includes('class="kpis"') && h.includes('قيمة المخزون التقديرية'), 'بطاقات الملخص'); ok(h.includes('sbadge low') && h.includes('منخفض') && h.includes('sbadge ok'), 'شارات الحالة');
+  ok(h.includes('class="lvl"') && h.includes('يكفي لـ') && h.includes('طلب النواقص'), 'شريط المستوى وتقدير الكفاية وزر طلب النواقص'); ok(h.includes('data-ft="need"') && h.includes('تصدير CSV'), 'الفلاتر والتصدير');
+  const plan = ctx.reorderPlan(I)[''] || []; eq(plan.length, 1, 'خطة الطلب تشمل البن فقط'); eq(plan[0].qty, 2600, 'الكمية المقترحة = ضعف الحد − الرصيد');
+  ctx.reorderDialog(I); ok(dlg.html.includes('اقتراح أمر شراء') && dlg.html.includes('بدون مورّد'), 'حوار طلب النواقص');
+  ctx.stockDetail(I.ingredients.find((x) => x.name === 'بن'), {}, {}); ok(dlg.html.includes('آخر الحركات') && dlg.html.includes('يدخل في 0 صنف'), 'نافذة تفاصيل المكوّن'); clean(dlg.html, 'نافذة التفاصيل');
   done();
 })().catch((e) => { console.log('✗ استثناء:', e); process.exit(1); });

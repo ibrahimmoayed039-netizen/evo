@@ -2,6 +2,7 @@
 // المتوقع في الدرج = رصيد الافتتاح + النقدي المقبوض (بعد خصم الباقي) − النقدي المرتجع + إيداعات − مصروفات.
 const orders = require('./orders');
 const db = require('./db');
+const cur = require('./currency');
 const auth = require('./auth');
 const { ledger } = require('./reports');
 
@@ -38,7 +39,7 @@ function open(openingCash) {
   if (openRow()) throw new Error('توجد وردية مفتوحة بالفعل');
   const c = cents(openingCash ?? 0);
   const id = Number(sqlite().prepare('INSERT INTO shifts(opened_at,opened_by,opened_by_id,opening_cents) VALUES(?,?,?,?)').run(new Date().toISOString(), u?.name || null, u?.id || null, c).lastInsertRowid);
-  auth.audit('shift_open', `وردية #${id} — رصيد الافتتاح ${(c / 100).toFixed(2)}`);
+  auth.audit('shift_open', `وردية #${id} — رصيد الافتتاح ${cur.plain(c)}`);
   return summary(id);
 }
 
@@ -49,7 +50,7 @@ function addMove(type, amount, reason) {
   const c = cents(amount); if (c <= 0) throw new Error('المبلغ يجب أن يكون أكبر من صفر');
   reason = text(reason, 120); if (!reason) throw new Error('اكتب السبب');
   sqlite().prepare('INSERT INTO cash_moves(shift_id,type,amount_cents,reason,created_at,user_name) VALUES(?,?,?,?,?,?)').run(s.id, type, c, reason, new Date().toISOString(), auth.current()?.name || null);
-  auth.audit(type === 'in' ? 'cash_in' : 'cash_out', `وردية #${s.id}: ${(c / 100).toFixed(2)} — ${reason}`);
+  auth.audit(type === 'in' ? 'cash_in' : 'cash_out', `وردية #${s.id}: ${cur.plain(c)} — ${reason}`);
   return summary(s.id);
 }
 
@@ -90,7 +91,7 @@ function close(countedCash, note) {
       .run(closedAt, b.closedBy, counted, b.expectedCents, b.diffCents, b.note, JSON.stringify(b), s.id);
     return b;
   })();
-  auth.audit('shift_close', `وردية #${s.id} — المتوقع ${(out.expectedCents / 100).toFixed(2)}، المعدود ${(counted / 100).toFixed(2)}، الفرق ${(out.diffCents / 100).toFixed(2)}`);
+  auth.audit('shift_close', `وردية #${s.id} — المتوقع ${cur.plain(out.expectedCents)}، المعدود ${cur.plain(counted)}، الفرق ${cur.plain(out.diffCents)}`);
   return out;
 }
 

@@ -3,7 +3,7 @@ const { ok, eq, done } = require('./harness');
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts'), reports = require(S + 'reports'), delivery = require(S + 'delivery');
-db.init(); orders.init(':memory:'); shifts.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'وجبات', sort: 1 }); menu.saveItem({ categoryId: db.get().categories[0].id, name: 'برجر', price: 50 });
 const burger = db.get().items[0].id, today = reports.ymd(new Date()), L1 = [{ itemId: burger, qty: 1 }];
 const zk = delivery.saveConfig({ baseFee: 5, freeOver: 0, zones: [{ name: 'الكرادة', fee: 8 }, { name: 'المنصور <i>', fee: 12 }] }).zones[0];
@@ -46,7 +46,7 @@ const ctx = {
   },
 };
 vm.createContext(ctx);
-for (const f of ['pos.js', 'delivery.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer', f), 'utf8'), ctx, { filename: f });
+for (const f of ['currency.js', 'pos.js', 'delivery.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer', f), 'utf8'), ctx, { filename: f });
 ctx.flash = (m) => flashes.push(m); // pos.js يعرّف flash حقيقية؛ نستبدلها بنسخة تلتقط الرسائل
 const tick = () => new Promise((r) => setTimeout(r, 30));
 const clean = (h, m) => ok(h.length > 100 && !/undefined|NaN|\[object|Infinity/.test(h), m + ' بلا undefined/NaN');
@@ -59,7 +59,7 @@ const tab = async (t) => { vm.runInContext(`DV.tab='${t}'; DV.edit=null`, ctx); 
   const colOf = (n) => { const i = h.indexOf('#' + n + '<'); return ['preparing', 'on_the_way', 'delivered'].filter((s) => h.lastIndexOf('dvcol ' + s, i) >= 0).pop(); };
   eq(colOf(prep.number), 'preparing', 'طلب التجهيز في عموده'); eq(colOf(way.number), 'on_the_way', 'طلب الطريق في عموده'); eq(colOf(owed.number), 'delivered', 'المسلَّم في عموده');
   ok(h.includes('عميل-بذمة &lt;b&gt;') && !h.includes('عميل-بذمة <b>') && h.includes('شارع &lt;u&gt;1') && h.includes('حيدر &lt;b&gt;'), 'هروب HTML في الاسم والعنوان والسائق');
-  ok(h.includes('خرج للتوصيل') && h.includes('تم التسليم ✓') && h.includes('توصيل 8.00') && h.includes('الكرادة'), 'الأزرار والأجرة والمنطقة');
+  ok(h.includes('خرج للتوصيل') && h.includes('تم التسليم ✓') && h.includes('توصيل 8') && h.includes('الكرادة'), 'الأزرار والأجرة والمنطقة');
   ok(h.includes('⚠ مسلَّم وغير مدفوع') && h.split('⚠ مسلَّم وغير مدفوع').length === 2, 'تنبيه واحد فقط للمسلَّم غير المدفوع');
   ok(h.includes('data-as="' + prep.id + '"') && !h.includes('data-as="' + owed.id + '"'), 'اختيار السائق قبل التسليم فقط');
   // ---- الإجراءات عبر المعالجات ----
@@ -79,7 +79,7 @@ const tab = async (t) => { vm.runInContext(`DV.tab='${t}'; DV.edit=null`, ctx); 
   ok(els.content.innerHTML.includes('لوحة التوصيل') && !els.content.innerHTML.includes('أجور السائقين') && !els.content.innerHTML.includes('data-dvt="pricing"'), 'الكاشير يرى اللوحة فقط');
   vm.runInContext("DV.tab='drivers'", ctx); await ctx.viewDelivery(); ok(vm.runInContext('DV.tab', ctx) === 'board', 'التبويب المقيّد يعود للوحة'); canFn = () => true;
   // ---- السائقون ----
-  h = await tab('drivers'); clean(h, 'السائقون'); ok(h.includes('حيدر &lt;b&gt;') && h.includes('3.00 لكل توصيلة') && h.includes('data-dd='), 'قائمة السائقين وأجرهم وزر الحذف');
+  h = await tab('drivers'); clean(h, 'السائقون'); ok(h.includes('حيدر &lt;b&gt;') && h.includes('3 لكل توصيلة') && h.includes('data-dd='), 'قائمة السائقين وأجرهم وزر الحذف');
   ctx.$('drName').value = 'كرار'; ctx.$('drPhone').value = '0790'; ctx.$('drMode').value = 'percent'; ctx.$('drWage').value = '25'; await els.drSave.onclick(); await tick();
   ok(delivery.drivers().some((d) => d.name === 'كرار' && d.wageMode === 'percent' && d.wagePct === 25), 'إضافة سائق بنسبة 25%');
   h = await tab('drivers'); ok(h.includes('25% من أجرة التوصيل'), 'عرض أجر النسبة');
@@ -96,13 +96,13 @@ const tab = async (t) => { vm.runInContext(`DV.tab='${t}'; DV.edit=null`, ctx); 
 
   // ---- الكاشير: المنطقة والأجرة ----
   ctx.resetPos(); vm.runInContext(`P.dcfg = ${JSON.stringify(delivery.config())}; P.type='delivery'; P.cust={name:'',phone:'0770',address:''}; P.cart=[{itemId:'${burger}',qty:1,mods:[],note:''}]`, ctx);
-  ctx.drawFields(); let f = els.pFields.innerHTML; ok(f.includes('id="fZone"') && f.includes('الكرادة — 9.00') && f.includes('الأجرة الافتراضية 6.00') && f.includes('id="fFee"'), 'حقول المنطقة والأجرة المخصصة للمدير');
+  ctx.drawFields(); let f = els.pFields.innerHTML; ok(f.includes('id="fZone"') && f.includes('الكرادة — 9') && f.includes('الأجرة الافتراضية 6') && f.includes('id="fFee"'), 'حقول المنطقة والأجرة المخصصة للمدير');
   vm.runInContext(`P.zoneId='${zk.id}'`, ctx);
   const pl = () => JSON.parse(JSON.stringify(vm.runInContext('payload()', ctx)));
   eq(pl().zoneId, zk.id, 'المنطقة في الحمولة'); ok(!('deliveryFee' in pl()) || pl().deliveryFee === undefined, 'بلا أجرة مخصصة: غير مُرسَلة');
   vm.runInContext("P.feeOv='3'", ctx); eq(pl().deliveryFee, 3, 'أجرة مخصصة رقم'); vm.runInContext("P.feeOv=''", ctx); eq(pl().deliveryFee, null, 'الحقل الفارغ = تلقائي (null)');
   vm.runInContext("P.feeOv=undefined", ctx); vm.runInContext("P.quote = null", ctx);
-  const q = await api_quote(); vm.runInContext(`P.quote = ${JSON.stringify(q)}`, ctx); ctx.drawTotals(); ok(els.pTot.innerHTML.includes('أجرة التوصيل (الكرادة)') && els.pTot.innerHTML.includes('9.00'), 'الإجمالي يعرض أجرة التوصيل والمنطقة');
+  const q = await api_quote(); vm.runInContext(`P.quote = ${JSON.stringify(q)}`, ctx); ctx.drawTotals(); ok(els.pTot.innerHTML.includes('أجرة التوصيل (الكرادة)') && els.pTot.innerHTML.includes('9'), 'الإجمالي يعرض أجرة التوصيل والمنطقة');
   clean(els.pTot.innerHTML + 'x'.repeat(100), 'إجماليات الكاشير');
   vm.runInContext("P.type='takeaway'", ctx); ok(pl().zoneId === undefined && pl().deliveryFee === undefined, 'غير التوصيل لا يرسل منطقة ولا أجرة');
   vm.runInContext("P.type='delivery'; P.zoneId='ghost'", ctx); ctx.drawFields(); eq(vm.runInContext('P.zoneId', ctx), '', 'منطقة محذوفة تُصفَّر');

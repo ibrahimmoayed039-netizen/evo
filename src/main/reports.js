@@ -2,6 +2,7 @@
 // دفتر المبيعات: المبيعات تُحسب في فترة الدفع، والمرتجعات (إلغاء طلب بعد دفعه) في فترة الإلغاء. الصافي = المبيعات − المرتجعات.
 const orders = require('./orders');
 const db = require('./db');
+const cur = require('./currency');
 
 const METHODS = ['cash', 'card', 'other'];
 const TYPES = { dine_in: 'صالة', takeaway: 'سفري', delivery: 'توصيل' };
@@ -80,7 +81,7 @@ function sales({ from, to } = {}) {
 }
 
 // CSV بترميز UTF-8 مع BOM ليفتح العربي صحيحاً في Excel
-const num = (c) => (c / 100).toFixed(2);
+const num = (c) => cur.plain(c);
 const cell = (v) => { let s = String(v ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 function toCsv(r) {
   const rows = [

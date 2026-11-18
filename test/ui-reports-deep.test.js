@@ -4,7 +4,7 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts'), inv = require(S + 'inventory');
 const reports = require(S + 'reports'), deepR = require(S + 'reports-deep');
-db.init(); orders.init(':memory:'); shifts.init(); inv.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); inv.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'مشروبات', sort: 1 }); const cat = db.get().categories[0].id;
 menu.saveItem({ categoryId: cat, name: 'لاتيه <i>', price: 10 }); menu.saveItem({ categoryId: cat, name: 'ماء', price: 2 }); menu.saveItem({ categoryId: cat, name: 'كيك <img src=x onerror=1>', price: 8 });
 const [latte, water, cake] = db.get().items.map((i) => i.id), today = reports.ymd(new Date());

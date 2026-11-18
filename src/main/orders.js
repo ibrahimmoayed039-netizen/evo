@@ -2,6 +2,7 @@
 // السعر يُحسب هنا من المنيو؛ لا نثق بأي سعر قادم من الواجهة.
 const path = require('path');
 const db = require('./db');
+const cur = require('./currency');
 const auth = require('./auth');
 
 let sql;
@@ -113,6 +114,7 @@ function totals(lines, discount, trusted = false, feeCents = 0) {
     } else if (discount.type === 'fixed') {
       discountCents = toCents(v);
     } else throw new Error('نوع الخصم غير صالح');
+    discountCents = cur.quant(discountCents); // الدينار بلا كسور
     if (discountCents > subtotalCents) throw new Error('الخصم أكبر من المجموع');
     disc = { type: discount.type, value: v };
   }
@@ -195,6 +197,20 @@ const updateOrder = (id, o, L, t) => sql.prepare(`UPDATE orders SET ${COLS.map((
 const base = (o) => ({ type: o.type, tableId: o.tableId, table: o.table, customer: o.customer, note: o.note, deliveryZoneId: o.deliveryZoneId, deliveryZone: o.deliveryZone, feeManual: o.feeManual });
 function needOpen(o) { if (o.status !== 'open') throw new Error('الطلب غير مفتوح'); return o; }
 
+// طلب جديد (من الكاشير) على طاولة فيها طلب مفتوح: يُضاف للفاتورة نفسها بدل فاتورة منفصلة.
+// save() نفسها تبقى كما هي (التقسيم والدمج والنقل تعتمد على تعدد الطلبات)، فيستدعيها المسار الأمامي بعد هذه الدالة.
+function mergeIntoOpen(p) {
+  const u = auth.current();
+  if (p.id || p.type !== 'dine_in' || !p.tableId || !Array.isArray(p.lines)) return p;
+  const row = sql.prepare("SELECT id FROM orders WHERE status='open' AND type='dine_in' AND table_id=? ORDER BY id LIMIT 1").get(p.tableId);
+  const ex = row ? get(row.id) : null;
+  if (!ex || (ex.discount && !(u && auth.can(u.role, 'discount')))) return p;
+  const key = (l) => l.itemId + '|' + (l.variantId || '') + '|' + (l.mods || []).map((m) => m.g + ':' + m.o).sort().join(',') + '|' + (l.note || '');
+  const lines = ex.lines.map((l) => ({ itemId: l.itemId, ...(l.variantId ? { variantId: l.variantId } : {}), qty: l.qty, mods: (l.mods || []).map((m) => ({ g: m.g, o: m.o })), note: l.note || '' }));
+  for (const raw of p.lines) { const same = lines.find((x) => key(x) === key(raw)); if (same) same.qty += Number(raw.qty); else lines.push(raw); }
+  return { ...p, id: ex.id, lines, discount: p.discount || ex.discount || null, note: [ex.note, p.note].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' — ').slice(0, 200) };
+}
+
 function save(p) {
   const u = auth.current();
   if (!TYPES[p.type]) throw new Error('نوع الطلب غير صالح');
@@ -226,7 +242,7 @@ function save(p) {
     return insertOrder(o, L, t, u);
   })();
   const r = get(Number(id));
-  auth.audit(p.id ? 'order_update' : 'order_create', `#${r.number} (${TYPES[r.type]}${r.table ? ' ' + r.table : ''})${t.discountCents ? ' — خصم ' + (t.discountCents / 100).toFixed(2) : ''}`);
+  auth.audit(p.id ? 'order_update' : 'order_create', `#${r.number} (${TYPES[r.type]}${r.table ? ' ' + r.table : ''})${t.discountCents ? ' — خصم ' + cur.plain(t.discountCents) : ''}`);
   if (removed.length) r.removedSent = removed; // أصناف أُرسلت ثم قُلّلت/حُذفت: يتولى main.js إبلاغ المطبخ
   return r;
 }
@@ -359,7 +375,7 @@ function pay(id, payments) {
     sql.prepare("UPDATE orders SET status='paid', paid_cents=?, change_cents=?, paid_at=?, shift_id=? WHERE id=? AND status='open'").run(paid, change, now, shiftId, id);
   })();
   try { require('./inventory').onPaid(id); } catch (e) { auth.audit('inventory_error', `#${o.number}: ${e.message}`); } // خطأ مخزون لا يوقف البيع
-  auth.audit('order_pay', `#${o.number} — ${(o.totalCents / 100).toFixed(2)} (${P.map((x) => METHODS[x.method]).join('+') || '-'})`);
+  auth.audit('order_pay', `#${o.number} — ${cur.plain(o.totalCents)} (${P.map((x) => METHODS[x.method]).join('+') || '-'})`);
   return get(id);
 }
 
@@ -381,11 +397,11 @@ function voidOrder(id, reason) {
   return get(id);
 }
 
-// الشكل الذي يفهمه receipt.js (مبالغ بالريال)
+// الشكل الذي يفهمه receipt.js (مبالغ بوحدة العملة، لا بالسنت)
 function toReceipt(id) {
   const o = get(id), r = (c) => c / 100;
   return {
-    restaurant: db.get().settings.restaurant, number: o.number, date: new Date(o.paidAt || o.createdAt).toLocaleString('ar-SA'),
+    restaurant: db.get().settings.restaurant, number: o.number, date: new Date(o.paidAt || o.createdAt).toLocaleString('ar-IQ'),
     type: TYPES[o.type], table: o.table, customer: o.type === 'delivery' ? o.customer : null, status: o.status, vatRate: o.vatRate,
     items: o.lines.map((l) => ({ name: l.name, qty: l.qty, price: r(l.unitCents), mods: l.mods.map((m) => m.name), note: l.note })),
     totals: { subtotal: r(o.subtotalCents), discount: r(o.discountCents), vat: r(o.vatCents), deliveryFee: r(o.deliveryFeeCents), total: r(o.totalCents), paid: r(o.paidCents), change: r(o.changeCents) },
@@ -393,4 +409,4 @@ function toReceipt(id) {
   };
 }
 
-module.exports = { init, close, quote, save, pay, get, list, voidOrder, kitchenReject, toReceipt, openByTable, relabel, moveOrder, merge, split, requestBill, raw: () => sql };
+module.exports = { mergeIntoOpen, init, close, quote, save, pay, get, list, voidOrder, kitchenReject, toReceipt, openByTable, relabel, moveOrder, merge, split, requestBill, raw: () => sql };

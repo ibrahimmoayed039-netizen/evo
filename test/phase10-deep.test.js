@@ -3,7 +3,7 @@ const { ok, eq, throws, done } = require('./harness');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts');
 const inv = require(S + 'inventory'), reports = require(S + 'reports'), deepR = require(S + 'reports-deep'), { can } = require(S + 'permissions');
-db.init(); orders.init(':memory:'); shifts.init(); inv.init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); inv.init();
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'مشروبات', sort: 1 });
 const cat = db.get().categories[0].id;
@@ -84,7 +84,7 @@ throws(() => deepR.deep({ from: '2026-13-01', to: today }), /تاريخ غير �
 throws(() => deepR.deep({ from: '2020-01-01', to: today }), /أطول من سنة/, 'أطول من سنة'); throws(() => deepR.deep(), /تاريخ غير صالح/, 'بلا معاملات');
 eq(can('owner', 'reports'), true, 'المالك'); eq(can('manager', 'reports'), true, 'المدير'); eq(can('accountant', 'reports'), true, 'المحاسب'); eq(can('cashier', 'reports'), false, 'الكاشير لا يرى الأرباح'); eq(can('waiter', 'reports'), false, 'النادل لا يرى الأرباح');
 const csv = deepR.toCsv(deepR.deep({ from: today, to: today }));
-ok(csv.startsWith('\uFEFF'), 'BOM للعربي في Excel'); ok(csv.includes('لاتيه,4,35.00,11.60,23.40,66.9,نجم'), 'سطر صنف في CSV'); ok(csv.includes('بلا وصفة'), 'الكيك بلا وصفة في CSV'); ok(csv.includes('المالك,owner'), 'سطر مستخدم');
+ok(csv.startsWith('\uFEFF'), 'BOM للعربي في Excel'); ok(csv.includes('لاتيه,4,35,12,23,66.9,نجم'), 'سطر صنف في CSV'); ok(csv.includes('بلا وصفة'), 'الكيك بلا وصفة في CSV'); ok(csv.includes('المالك,owner'), 'سطر مستخدم');
 menu.saveItem({ categoryId: cat, name: '=HYPERLINK("x")', price: 1 }); const inj = db.get().items.find((i) => i.name.startsWith('=')).id; const oi = sale(inj, 1); at(oi.id, 10);
 ok(deepR.toCsv(deepR.deep({ from: today, to: today })).includes(`"'=HYPERLINK`), 'حماية من حقن المعادلات في CSV');
 done();

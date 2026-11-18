@@ -4,7 +4,7 @@ const path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts');
 const reports = require(S + 'reports'), delivery = require(S + 'delivery'), perms = require(S + 'permissions');
-db.init(); orders.init(':memory:'); shifts.init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init();
 auth.setupOwner('المالك', '1234'); const ownerId = db.get().users[0].id; auth.login(ownerId, '1234');
 auth.createUser({ name: 'كاشير', role: 'cashier', pin: '1111' }); const cashierId = db.get().users.find((u) => u.role === 'cashier').id;
 menu.saveCategory({ name: 'وجبات', sort: 1 }); const cat = db.get().categories[0].id;

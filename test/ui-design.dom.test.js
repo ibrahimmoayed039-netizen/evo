@@ -6,7 +6,7 @@ const fs = require('fs');
 const R = require('path').join(__dirname, '../src/');
 const M = (n) => require(R + 'main/' + n);
 const db = M('db'), auth = M('auth'), menu = M('menu'), orders = M('orders'), shifts = M('shifts'), inv = M('inventory'), kitchen = M('kitchen');
-db.init(); orders.init(':memory:'); shifts.init(); inv.init(); auth.setupOwner('A', '1234'); auth.login(db.get().users[0].id, '1234'); shifts.open(100);
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); inv.init(); auth.setupOwner('A', '1234'); auth.login(db.get().users[0].id, '1234'); shifts.open(100);
 menu.saveCategory({ name: 'رئيسية', color: '#0F766E' }); menu.saveCategory({ name: 'مخفي', active: false });
 const [c1, c2] = db.get().categories.map((c) => c.id);
 menu.saveItem({ categoryId: c1, name: 'برجر', price: 38, variants: [{ name: 'صغير', price: 30 }, { name: 'وسط', price: 38, isDefault: true }] });
@@ -24,7 +24,7 @@ w.api = new Proxy({
 }, { get: (t, k) => (k in t ? t[k] : async () => null) });
 w.eval(`var me={perms:['menu','pos','inventory','customers','discount'],role:'owner'}; var PM; `);
 w.eval(`var $=(id)=>document.getElementById(id); var esc=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); var errMsg=(e)=>String(e.message||e).replace(/^.*Error: /,''); var can=(p)=>me.perms.includes(p);`);
-for (const f of ['pos', 'menu', 'inventory']) { try { w.eval(fs.readFileSync(R + 'renderer/' + f + '.js', 'utf8').replace(/^const /gm, 'var ').replace(/^let /gm, 'var ')); } catch (e) { console.log('load', f, e.message.slice(0, 120)); } }
+for (const f of ['currency', 'pos', 'menu', 'inventory']) { try { w.eval(fs.readFileSync(R + 'renderer/' + f + '.js', 'utf8').replace(/^const /gm, 'var ').replace(/^let /gm, 'var ')); } catch (e) { console.log('load', f, e.message.slice(0, 120)); } }
 const $ = (id) => w.document.getElementById(id), q = (s) => w.document.querySelector(s), qa = (s) => [...w.document.querySelectorAll(s)];
 const tick = () => new Promise((r) => setTimeout(r, 30));
 (async () => {

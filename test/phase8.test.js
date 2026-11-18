@@ -3,7 +3,7 @@ const { ok, eq, throws, done } = require('./harness');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts');
 const tables = require(S + 'tables'), crm = require(S + 'crm'), res = require(S + 'reservations'), { can } = require(S + 'permissions');
-db.init(); orders.init(':memory:'); shifts.init(); crm.init(); res.init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); crm.init(); res.init();
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'مشروبات', sort: 1 });
 menu.saveItem({ categoryId: db.get().categories[0].id, name: 'لاتيه', price: 10 });
@@ -32,7 +32,7 @@ eq(crm.list('محمد').length, 1, 'بحث بالاسم'); eq(crm.list('%').leng
 eq(crm.loyalty().enabled, false, 'الولاء معطّل افتراضياً');
 const a = make(1, sara.id); pay(a.id, [{ method: 'cash', amount: 20 }]);
 eq(pts(sara.id), 0, 'لا نقاط والولاء معطّل');
-throws(() => crm.setLoyalty({ enabled: true, earnPerRiyal: -1, pointValueCents: 5 }), /نقاط الريال/, 'نقاط سالبة');
+throws(() => crm.setLoyalty({ enabled: true, earnPerRiyal: -1, pointValueCents: 5 }), /نقاط كل دينار/, 'نقاط سالبة');
 throws(() => crm.setLoyalty({ enabled: true, earnPerRiyal: 1, pointValueCents: 0.5 }), /قيمة النقطة/, 'قيمة نقطة كسرية');
 crm.setLoyalty({ enabled: true, earnPerRiyal: 1, pointValueCents: 5 });
 const b = make(2, sara.id); pay(b.id, [{ method: 'cash', amount: 23 }]);
@@ -80,12 +80,12 @@ pay(f.id, [{ method: 'other', kind: 'gift', ref: gc.code.toLowerCase(), amount: 
 eq(crm.giftGet(gc.code).balanceCents, 8850, 'خُصم 11.50 من الكرت'); eq(orders.get(f.id).status, 'paid', 'دفع كامل بالكرت');
 // رصيد غير كافٍ يلغي كل شيء
 const small = crm.giftIssue({ amount: 5, method: 'card' }), g = make(1);
-throws(() => orders.pay(g.id, [{ method: 'other', kind: 'gift', ref: small.code, amount: 11.5 }]), /رصيد الكرت 5\.00/, 'رصيد الكرت لا يكفي');
+throws(() => orders.pay(g.id, [{ method: 'other', kind: 'gift', ref: small.code, amount: 11.5 }]), /رصيد الكرت 5 فقط/, 'رصيد الكرت لا يكفي');
 eq(orders.get(g.id).status, 'open', 'الطلب بقي مفتوحاً'); eq(crm.giftGet(small.code).balanceCents, 500, 'الرصيد لم يتغير');
 throws(() => orders.pay(g.id, [{ method: 'other', kind: 'gift', ref: 'NOPE', amount: 11.5 }]), /غير موجود/, 'كرت مجهول عند الدفع');
 pay(g.id, [{ method: 'other', kind: 'gift', ref: small.code, amount: 5 }, { method: 'cash', amount: 6.5 }]);
 eq(crm.giftGet(small.code).balanceCents, 0, 'دفع مجزأ يستنفد الكرت'); eq(orders.get(g.id).changeCents, 0, 'بلا باقي');
-const h = make(1); throws(() => orders.pay(h.id, [{ method: 'other', kind: 'gift', ref: small.code, amount: 1 }, { method: 'cash', amount: 10.5 }]), /رصيد الكرت 0\.00/, 'كرت فارغ');
+const h = make(1); throws(() => orders.pay(h.id, [{ method: 'other', kind: 'gift', ref: small.code, amount: 1 }, { method: 'cash', amount: 10.5 }]), /رصيد الكرت 0 فقط/, 'كرت فارغ');
 // منتهي وملغي
 const exp = crm.giftIssue({ amount: 20, method: 'card', expiryDays: 30 });
 orders.raw().prepare('UPDATE gift_cards SET expires_at=? WHERE code=?').run('2020-01-01T00:00:00.000Z', exp.code.replace(/-/g, ''));
@@ -185,7 +185,7 @@ const L2 = crm.giftLiabilities(); eq(L2.expiredCents - E0.expiredCents, 3000, '�
 // قسيمة الكرت
 const g3 = crm.giftIssue({ amount: 25, method: 'card', buyerNote: 'من <أحمد>' });
 const gv = crm.giftVoucher(g3.code), gh = buildGiftHTML(gv, { width: 58 });
-ok(gh.includes(g3.code) && gh.includes('25.00') && gh.includes('كرت هدية') && gh.includes('width:58mm'), 'قسيمة الكرت: الرمز والمبلغ والعرض');
+ok(gh.includes(g3.code) && gh.includes('25 د.ع') && gh.includes('كرت هدية') && gh.includes('width:58mm'), 'قسيمة الكرت: الرمز والمبلغ والعرض');
 ok(!gh.includes('<أحمد>') && gh.includes('&lt;أحمد&gt;'), 'هروب HTML في ملاحظة القسيمة'); ok(gh.includes('بلا تاريخ انتهاء'), 'قسيمة بلا انتهاء');
 throws(() => crm.giftVoucher('ZZZZ-ZZZZ-ZZZZ'), /غير موجود/, 'قسيمة كرت مجهول');
 

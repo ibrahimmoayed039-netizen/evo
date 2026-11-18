@@ -2,7 +2,7 @@
 let CRM = { tab: 'cust', q: '' };
 const REASON_PTS = { earn: 'اكتساب', redeem: 'استرداد', void_earn: 'عكس اكتساب (إلغاء)', void_redeem: 'إرجاع نقاط (إلغاء)', adjust: 'تعديل يدوي' };
 const GIFT_MOVE = { issue: 'إصدار', redeem: 'استخدام', refund: 'استرجاع (إلغاء طلب)', void: 'إلغاء الكرت' };
-const dt = (x) => (x ? new Date(x).toLocaleString('ar-SA') : '—');
+const dt = (x) => (x ? new Date(x).toLocaleString('ar-IQ') : '—');
 const crmFail = (e) => { const x = $('crmErr'); if (x) x.textContent = errMsg(e); };
 const giftState = (c) => (c.status === 'void' ? 'ملغي' : c.expired ? 'منتهي' : 'نشط');
 
@@ -86,7 +86,7 @@ async function tabGift() {
   const rows = await api.giftList();
   let liab = null; if (can('crm.manage')) { try { liab = await api.giftLiab(); } catch {} }
   $('crmBody').innerHTML = `${liab ? `<div class="card"><b>التزامات الكروت (أرصدة غير مستخدمة)</b><div class="stats"><div class="stat"><small>نشطة (${liab.activeCount})</small><b>${money(liab.activeCents)}</b></div><div class="stat"><small>منتهية برصيد (${liab.expiredCount})</small><b>${money(liab.expiredCents)}</b></div><div class="stat"><small>المُصدر</small><b>${money(liab.issuedCents)}</b></div><div class="stat"><small>المستخدم (صافي)</small><b>${money(liab.usedCents)}</b></div></div></div>` : ''}<div class="card"><b>إصدار كرت هدية</b>
-   <div class="drow"><label>المبلغ</label><input id="gA" type="number" min="1" step="0.01" inputmode="decimal"><label>الدفع</label><select id="gM"><option value="cash">نقدي</option><option value="card">بطاقة</option></select></div>
+   <div class="drow"><label>المبلغ</label><input id="gA" type="number" min="1" step="any" inputmode="decimal"><label>الدفع</label><select id="gM"><option value="cash">نقدي</option><option value="card">بطاقة</option></select></div>
    <div class="drow"><label>ملاحظة</label><input id="gN" placeholder="اسم المشتري (اختياري)"><label>صلاحية (يوم)</label><input id="gE" type="number" min="1" placeholder="بلا حد"></div>
    <button id="gIssue">إصدار</button></div>
    <div class="drow"><input id="gQ" placeholder="رمز الكرت للتحقق من الرصيد" dir="ltr"><button id="gChk" class="sm">تحقق</button></div>
@@ -96,7 +96,7 @@ async function tabGift() {
   $('gIssue').onclick = async () => {
     try {
       const c = await api.giftIssue({ amount: $('gA').value, method: $('gM').value, buyerNote: $('gN').value, expiryDays: $('gE').value });
-      const d = dlgOpen(`<h3>تم إصدار الكرت</h3><div class="big" dir="ltr">${esc(c.code)}</div><div class="big">${money(c.balanceCents)} ر.س</div><div class="muted">سلّم الرمز للعميل — لا يمكن استعادته لاحقاً إلا من هذه الصفحة.</div>${can('print') ? '<button id="gPr" class="sec">طباعة القسيمة</button>' : ''}<button id="gOk">تم</button>`);
+      const d = dlgOpen(`<h3>تم إصدار الكرت</h3><div class="big" dir="ltr">${esc(c.code)}</div><div class="big">${money(c.balanceCents)} ${CUR.symbol}</div><div class="muted">سلّم الرمز للعميل — لا يمكن استعادته لاحقاً إلا من هذه الصفحة.</div>${can('print') ? '<button id="gPr" class="sec">طباعة القسيمة</button>' : ''}<button id="gOk">تم</button>`);
       d.querySelector('#gOk').onclick = () => { dlgClose(); viewCustomers(); };
       if (d.querySelector('#gPr')) d.querySelector('#gPr').onclick = () => { dlgClose(); showVoucher(c.code, viewCustomers); };
     } catch (e) { crmFail(e); }
@@ -139,13 +139,13 @@ async function showVoucher(code, after) {
 async function tabLoy() {
   const L = await api.loyaltyGet();
   $('crmBody').innerHTML = `<div class="card"><label class="chk"><input type="checkbox" id="lyOn" ${L.enabled ? 'checked' : ''}> تفعيل برنامج الولاء</label>
-   <label>نقاط لكل 1 ريال (قبل الضريبة وبعد الخصم)</label><input id="lyE" type="number" min="0" max="100" step="0.1" value="${L.earnPerRiyal}">
-   <label>قيمة النقطة بالهللة</label><input id="lyV" type="number" min="1" max="1000" step="1" value="${L.pointValueCents}">
+   <label>نقاط لكل 1 دينار (قبل الضريبة وبعد الخصم، مثال: 0.01 = نقطة لكل 100 دينار)</label><input id="lyE" type="number" min="0" max="100" step="any" value="${L.earnPerRiyal}">
+   <label>قيمة النقطة (بالدينار)</label><input id="lyV" type="number" min="0.01" step="any" value="${L.pointValueCents / 100}">
    <div class="muted" id="lyHint"></div><button id="lySave">حفظ</button></div>`;
-  const hint = () => { $('lyHint').textContent = `100 نقطة = ${money(100 * (+$('lyV').value || 0))} ر.س`; };
+  const hint = () => { $('lyHint').textContent = `100 نقطة = ${money(100 * Math.round((+$('lyV').value || 0) * 100))} ${CUR.symbol}`; };
   $('lyV').oninput = hint; hint();
   $('lySave').onclick = async () => {
-    try { await api.loyaltySet({ enabled: $('lyOn').checked, earnPerRiyal: +$('lyE').value, pointValueCents: +$('lyV').value }); flash('تم حفظ إعدادات الولاء'); $('crmErr').textContent = ''; }
+    try { await api.loyaltySet({ enabled: $('lyOn').checked, earnPerRiyal: +$('lyE').value, pointValueCents: Math.round((+$('lyV').value || 0) * 100) }); flash('تم حفظ إعدادات الولاء'); $('crmErr').textContent = ''; }
     catch (e) { crmFail(e); }
   };
 }

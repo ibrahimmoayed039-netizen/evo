@@ -3,7 +3,7 @@ const { ok, eq, done } = require('./harness');
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts'), tables = require(S + 'tables');
-db.init(); orders.init(':memory:'); shifts.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'وجبات', sort: 1 }); menu.saveItem({ categoryId: db.get().categories[0].id, name: 'برجر', price: 50 }); const burger = db.get().items[0].id, L = [{ itemId: burger, qty: 1 }];
 const sq = tables.save({ name: 'مربعة <b>', seats: 4, shape: 'square', size: 'm', x: 20, y: 30 }), rd = tables.save({ name: 'دائرية', seats: 6, shape: 'round', size: 'l', x: 50, y: 30 }), rc = tables.save({ name: 'مستطيلة', seats: 20, shape: 'rect', size: 's', x: 80, y: 30 });
 const ob = orders.save({ type: 'dine_in', tableId: sq.id, lines: L }), oc = orders.save({ type: 'dine_in', tableId: rd.id, lines: L }); orders.requestBill(oc.id);
@@ -24,6 +24,7 @@ const ctx = {
   api: { tablesFloor: async () => tables.floor(), orderBill: async (id, on) => orders.requestBill(id, on), tableSave: async (t) => tables.save(t), orderGet: async (id) => orders.get(id) },
 };
 vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/currency.js'), 'utf8'), ctx, { filename: 'currency.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/pos.js'), 'utf8'), ctx, { filename: 'pos.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/renderer/tables.js'), 'utf8'), ctx, { filename: 'tables.js' });
 ctx.dlgOpen = (h) => { dlg.html = h; return dlgEl; }; ctx.dlgClose = () => {}; ctx.flash = (m) => flashes.push(m);

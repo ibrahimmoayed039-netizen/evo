@@ -2,7 +2,7 @@
 const { ok, eq, throws, done } = require('./harness');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), shifts = require(S + 'shifts'), inv = require(S + 'inventory'), kitchen = require(S + 'kitchen');
-db.init(); orders.init(':memory:'); shifts.init(); inv.init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init(); inv.init();
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234'); shifts.open(100);
 
 // ---- التصنيفات ----

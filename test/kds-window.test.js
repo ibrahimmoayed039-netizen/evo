@@ -18,7 +18,7 @@ Module._load = function (req, ...r) {
 };
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth');
-db.init(); auth.setupOwner('المالك', '1234'); auth.createUser({ name: 'نادل', role: 'waiter', pin: '2222' }); auth.createUser({ name: 'طباخ', role: 'kitchen', pin: '3333' });
+db.init(); db.get().settings.vatRate = 0.15; auth.setupOwner('المالك', '1234'); auth.createUser({ name: 'نادل', role: 'waiter', pin: '2222' }); auth.createUser({ name: 'طباخ', role: 'kitchen', pin: '3333' });
 require(S + 'main.js');
 const call = (ch, ...a) => handlers[ch]({}, ...a);
 const U = (n) => db.get().users.find((u) => u.name === n);

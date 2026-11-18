@@ -4,7 +4,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // الخادم يستعمل ش�
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), tables = require(S + 'tables'), orders = require(S + 'orders'), kitchen = require(S + 'kitchen');
 const wapi = require(S + 'waiter-api');
-db.init(); orders.init(':memory:'); require(S + 'shifts').init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); require(S + 'shifts').init();
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 auth.createUser({ name: 'سالم', role: 'waiter', pin: '2222' });
 auth.createUser({ name: 'طباخ', role: 'kitchen', pin: '3333' });

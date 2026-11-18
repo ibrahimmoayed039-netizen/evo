@@ -129,7 +129,7 @@ handle('menu:deleteGroup', 'menu', (id) => menu.deleteGroup(id));
 handle('orders:quote', 'pos', (p) => orders.quote(p));
 // customerId: ربط العميل بالطلب (null لإزالته). غير المُرسَل يُبقي الربط كما هو
 handle('orders:save', 'pos', async (p) => {
-  const o = orders.save(p);
+  const o = orders.save(orders.mergeIntoOpen(p));
   if (p.customerId !== undefined) crm.attach(o.id, p.customerId || null);
   else if (o.type === 'delivery' && p.customer?.phone && !crm.customerOf(o.id)) { // ربط تلقائي بعميل مسجّل بنفس جوال التوصيل
     const c = crm.findByPhone(p.customer.phone); if (c) crm.attach(o.id, c.id);

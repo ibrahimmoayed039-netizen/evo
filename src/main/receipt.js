@@ -1,6 +1,7 @@
 // بناء HTML الإيصال (يُستخدم للمعاينة وللطباعة بنفس الشكل)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const money = (n) => Number(n || 0).toFixed(2);
+const cur = require('./currency');
+const money = (n) => cur.fmtUnits(n); // الدينار: بفواصل آلاف وبلا كسور
 
 function buildReceiptHTML(order, { width = 80 } = {}) {
   const rows = order.items
@@ -10,7 +11,7 @@ function buildReceiptHTML(order, { width = 80 } = {}) {
   let T = order.totals;
   if (!T) {
     const subtotal = order.items.reduce((s, i) => s + i.price * i.qty, 0);
-    const vat = subtotal * (order.vatRate ?? 0.15);
+    const vat = subtotal * (order.vatRate ?? 0);
     T = { subtotal, discount: order.discount || 0, vat, total: subtotal + vat - (order.discount || 0) };
   }
   const pays = (order.payments || []).map((p) => `<tr><td colspan="2">${esc(p.method)}</td><td class="e">${money(p.amount)}</td></tr>`).join('');
@@ -38,7 +39,7 @@ function buildReceiptHTML(order, { width = 80 } = {}) {
   <tfoot>
    <tr class="tot"><td colspan="2">المجموع</td><td class="e">${money(T.subtotal)}</td></tr>
    ${T.discount ? `<tr><td colspan="2">الخصم</td><td class="e">-${money(T.discount)}</td></tr>` : ''}
-   <tr><td colspan="2">الضريبة (${Math.round((order.vatRate ?? 0.15) * 100)}%)</td><td class="e">${money(T.vat)}</td></tr>
+   ${T.vat ? `<tr><td colspan="2">الضريبة (${Math.round((order.vatRate ?? 0) * 100)}%)</td><td class="e">${money(T.vat)}</td></tr>` : ''}
    ${T.deliveryFee ? `<tr><td colspan="2">أجرة التوصيل</td><td class="e">${money(T.deliveryFee)}</td></tr>` : ''}
    <tr class="tot"><td colspan="2">الإجمالي</td><td class="e">${money(T.total)}</td></tr>
    ${pays}${T.change ? `<tr><td colspan="2">الباقي</td><td class="e">${money(T.change)}</td></tr>` : ''}
@@ -51,7 +52,7 @@ function buildReceiptHTML(order, { width = 80 } = {}) {
 // تذكرة المطبخ: خط كبير بلا أسعار
 function buildKotHTML(t, { width = 80 } = {}) {
   const rows = t.items.map((i) => `<div class="it"><b>${i.qty} ×</b> ${esc(i.name)}${(i.mods || []).length ? `<div class="s">+ ${esc(i.mods.join('، '))}</div>` : ''}${i.note ? `<div class="s">** ${esc(i.note)} **</div>` : ''}</div>`).join('');
-  const time = new Date(t.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+  const time = new Date(t.createdAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
   return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><style>
   @page{margin:0}*{box-sizing:border-box}
   body{margin:0;padding:2mm;width:${width}mm;font:${width === 58 ? 15 : 18}px/1.35 Tahoma,Arial,sans-serif;color:#000;background:#fff}
@@ -65,7 +66,7 @@ function buildKotHTML(t, { width = 80 } = {}) {
 
 // تقرير الوردية (X إن كانت مفتوحة، Z إن كانت مغلقة). أرقام المتوقع/الفرق تظهر فقط إن طُلبت (الإغلاق الأعمى للكاشير)
 function buildShiftHTML(s, { width = 80, showExpected = true } = {}) {
-  const dt = (iso) => (iso ? new Date(iso).toLocaleString('ar-SA') : '-');
+  const dt = (iso) => (iso ? new Date(iso).toLocaleString('ar-IQ') : '-');
   const m = (c) => money((c || 0) / 100), row = (a, b, cls = '') => `<tr class="${cls}"><td>${a}</td><td class="e">${b}</td></tr>`;
   const PL = { cash: 'نقدي', card: 'بطاقة', other: 'أخرى' };
   const moves = (s.moves || []).map((x) => row(`${x.type === 'in' ? 'إيداع' : 'مصروف'}: ${esc(x.reason)}`, (x.type === 'in' ? '+' : '-') + m(x.amountCents))).join('');
@@ -79,7 +80,7 @@ function buildShiftHTML(s, { width = 80, showExpected = true } = {}) {
   <h1>${esc(s.restaurant || 'اسم المطعم')}</h1>
   <div class="meta">${s.closedAt ? 'تقرير إغلاق الوردية (Z)' : 'تقرير الوردية الحالية (X)'} #${esc(s.id)}<br>فتح: ${esc(dt(s.openedAt))} — ${esc(s.openedBy || '-')}<br>${s.closedAt ? 'إغلاق: ' + esc(dt(s.closedAt)) + ' — ' + esc(s.closedBy || '-') : ''}</div>
   <h2>المبيعات</h2><table>
-   ${row('عدد الطلبات', s.sales.count)}${row('المجموع قبل الخصم', m(s.sales.subtotalCents))}${row('الخصومات', '-' + m(s.sales.discountCents))}${row('الضريبة', m(s.sales.vatCents))}
+   ${row('عدد الطلبات', s.sales.count)}${row('المجموع قبل الخصم', m(s.sales.subtotalCents))}${row('الخصومات', '-' + m(s.sales.discountCents))}${s.sales.vatCents ? row('الضريبة', m(s.sales.vatCents)) : ''}
    ${row('إجمالي المبيعات', m(s.sales.totalCents), 'tot')}${row(`المرتجعات (${s.refunds.count})`, '-' + m(s.refunds.totalCents))}${row('الصافي', m(s.netCents), 'tot')}</table>
   <h2>طرق الدفع (صافي)</h2><table>${['cash', 'card', 'other'].map((k) => row(PL[k], m(s.payments[k].netCents))).join('')}</table>
   <h2>الصندوق (نقدي)</h2><table>
@@ -100,9 +101,9 @@ function buildGiftHTML(g, { width = 80 } = {}) {
   small{font-size:.85em}
   </style></head><body>
   <h1>${esc(g.restaurant || 'اسم المطعم')}</h1><div>كرت هدية</div>
-  <div class="amt">${m(g.initialCents)} ر.س</div>
+  <div class="amt">${m(g.initialCents)} ${cur.symbol}</div>
   <div class="code">${esc(g.code)}</div>
-  ${g.expiresAt ? `<div>صالح حتى: ${esc(new Date(g.expiresAt).toLocaleDateString('ar-SA'))}</div>` : '<div>بلا تاريخ انتهاء</div>'}
+  ${g.expiresAt ? `<div>صالح حتى: ${esc(new Date(g.expiresAt).toLocaleDateString('ar-IQ'))}</div>` : '<div>بلا تاريخ انتهاء</div>'}
   ${g.buyerNote ? `<div>من: ${esc(g.buyerNote)}</div>` : ''}
   <small>يُستخدم رمز الكرت عند الدفع. يُرجى الاحتفاظ به.</small>
   </body></html>`;

@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const orders = require('./orders');
 const db = require('./db');
+const cur = require('./currency');
 const auth = require('./auth');
 
 const sqlite = () => orders.raw();
@@ -52,16 +53,16 @@ function init() {
 // ---------- إعدادات الولاء ----------
 function loyalty() {
   const s = db.get().settings;
-  s.loyalty ??= { enabled: false, earnPerRiyal: 1, pointValueCents: 5 }; // 100 نقطة = 5 ريال
+  s.loyalty ??= { enabled: false, earnPerRiyal: 0.01, pointValueCents: 500 }; // نقطة لكل 100 دينار؛ النقطة = 5 دنانير (500 سنت)
   return s.loyalty;
 }
 function setLoyalty(p) {
   const earn = Number(p.earnPerRiyal), pv = Number(p.pointValueCents);
-  if (!Number.isFinite(earn) || earn < 0 || earn > 100) throw new Error('نقاط الريال يجب أن تكون بين 0 و100');
-  if (!Number.isInteger(pv) || pv < 1 || pv > 1000) throw new Error('قيمة النقطة (بالهللة) يجب أن تكون عدداً صحيحاً بين 1 و1000');
+  if (!Number.isFinite(earn) || earn < 0 || earn > 100) throw new Error('نقاط كل دينار يجب أن تكون بين 0 و100');
+  if (!Number.isInteger(pv) || pv < 1 || pv > 1000000) throw new Error('قيمة النقطة (بالسنت) يجب أن تكون عدداً صحيحاً بين 1 و1000000');
   db.get().settings.loyalty = { enabled: !!p.enabled, earnPerRiyal: earn, pointValueCents: pv };
   db.save();
-  auth.audit('settings', `الولاء: ${p.enabled ? 'مفعّل' : 'معطّل'}، ${earn} نقطة/ريال، النقطة = ${pv} هللة`);
+  auth.audit('settings', `الولاء: ${p.enabled ? 'مفعّل' : 'معطّل'}، ${earn} نقطة/دينار، النقطة = ${cur.plain(pv)} دينار`);
   return loyalty();
 }
 
@@ -170,7 +171,7 @@ function spend(orderId, P) {
       if (g.status !== 'active') throw new Error('كرت الهدية ملغي');
       if (g.expires_at && g.expires_at < now()) throw new Error('كرت الهدية منتهي الصلاحية');
       if (sql.prepare("SELECT 1 FROM gift_moves WHERE code=? AND order_id=? AND type='redeem'").get(code, orderId)) throw new Error('الكرت مستخدم في هذا الطلب مسبقاً');
-      if (p.amountCents > g.balance_cents) throw new Error(`رصيد الكرت ${(g.balance_cents / 100).toFixed(2)} فقط`);
+      if (p.amountCents > g.balance_cents) throw new Error(`رصيد الكرت ${cur.plain(g.balance_cents)} فقط`);
       sql.prepare('UPDATE gift_cards SET balance_cents=balance_cents-? WHERE code=?').run(p.amountCents, code);
       sql.prepare("INSERT INTO gift_moves(code,type,amount_cents,order_id,created_at,user_name) VALUES(?, 'redeem',?,?,?,?)").run(code, p.amountCents, orderId, now(), uname());
     } else if (p.kind === 'points') {
@@ -244,7 +245,7 @@ function giftIssue({ amount, method, buyerNote, expiryDays }) {
     sqlite().prepare("INSERT INTO gift_moves(code,type,amount_cents,created_at,user_name) VALUES(?, 'issue',?,?,?)").run(code, c, now(), uname());
     if (method === 'cash' && shifts.currentId()) shifts.addMove('in', c / 100, `بيع كرت هدية ${fmtCode(code)}`);
   })();
-  auth.audit('giftcard_issue', `${fmtCode(code)} — ${(c / 100).toFixed(2)} (${method === 'cash' ? 'نقدي' : 'بطاقة'})`);
+  auth.audit('giftcard_issue', `${fmtCode(code)} — ${cur.plain(c)} (${method === 'cash' ? 'نقدي' : 'بطاقة'})`);
   return giftGet(code);
 }
 function giftVoid(code, reason) {
@@ -255,7 +256,7 @@ function giftVoid(code, reason) {
     sqlite().prepare("UPDATE gift_cards SET status='void', balance_cents=0 WHERE code=?").run(normCode(code));
     sqlite().prepare("INSERT INTO gift_moves(code,type,amount_cents,created_at,user_name) VALUES(?, 'void',?,?,?)").run(normCode(code), c.balanceCents, now(), uname());
   })();
-  auth.audit('giftcard_void', `${c.code} — رصيد ${(c.balanceCents / 100).toFixed(2)} — ${reason}`);
+  auth.audit('giftcard_void', `${c.code} — رصيد ${cur.plain(c.balanceCents)} — ${reason}`);
   return giftGet(code);
 }
 

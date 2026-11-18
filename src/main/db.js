@@ -18,7 +18,7 @@ function init() {
   data.settings ??= {};
   data.settings.restaurant ??= 'اسم المطعم';
   data.settings.delivery ??= { baseFeeCents: 0, freeOverCents: 0, zones: [] }; // أجرة التوصيل (الافتراضي 0 = بلا أجرة)
-  data.settings.vatRate ??= 0.15; // الضريبة تُضاف فوق سعر المنيو (غير شاملة)
+  data.settings.vatRate = 0; // الضريبة مُلغاة (لا تُضاف على الطلبات الجديدة؛ الطلبات القديمة تحتفظ بقيمتها)
   return data;
 }
 function save() {

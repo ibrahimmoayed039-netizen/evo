@@ -3,7 +3,7 @@ const { ok, eq, done } = require('./harness');
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), tables = require(S + 'tables'), orders = require(S + 'orders'), qrmenu = require(S + 'qrmenu');
-db.init(); orders.init(':memory:'); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 menu.saveCategory({ name: 'مشروبات', sort: 1 }); menu.saveItem({ categoryId: db.get().categories[0].id, name: 'شاي <i>', price: 4 });
 const T = tables.save({ name: 'T<1>', seats: 4 });
 
@@ -31,7 +31,7 @@ const flat = (e) => [e._t, ...e.children.map(flat)].join('|');
   vm.createContext(c2); vm.runInContext(SCRIPT, c2); await new Promise((r) => setTimeout(r, 20));
   eq(c2.url, '/api/menu?t=' + T.id, 'السكربت يطلب المنيو بمعرّف الطاولة');
   ok(flat(E.t).includes('اسم المطعم') && flat(E.s).includes('طاولة T<1>'), 'عنوان الصفحة واسم الطاولة (textContent آمن)');
-  ok(flat(E.m).includes('شاي <i>') && flat(E.m).includes('4.00 ر.س') && flat(E.n).includes('مشروبات'), 'عرض الصنف والسعر والتصنيف');
+  ok(flat(E.m).includes('شاي <i>') && flat(E.m).includes('4 د.ع') && flat(E.n).includes('مشروبات'), 'عرض الصنف والسعر والتصنيف');
   ok(flat(E.f).includes('15%'), 'ملاحظة الضريبة');
   done();
 })().catch((e) => { console.log('✗ استثناء: ' + e.stack); process.exit(1); });

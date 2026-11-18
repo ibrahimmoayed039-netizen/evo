@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80" fill="none" stroke="#C2A25F" stroke-width="1" stroke-opacity=".55">
+<g id="s"><rect x="22" y="22" width="36" height="36"/><rect x="22" y="22" width="36" height="36" transform="rotate(45 40 40)"/><circle cx="40" cy="40" r="5"/></g>
+<use href="#s" x="-40" y="-40"/><use href="#s" x="40" y="-40"/><use href="#s" x="-40" y="40"/><use href="#s" x="40" y="40"/>
+<path d="M40 0v14M40 66v14M0 40h14M66 40h14" stroke-opacity=".35"/></svg>

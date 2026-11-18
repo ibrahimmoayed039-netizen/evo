@@ -1,6 +1,7 @@
 // إدارة التوصيل: أجرة التوصيل (منطقة/افتراضية/مجاني فوق مبلغ)، السائقون وأجورهم، حالة الطلب (تجهيز ← في الطريق ← تم التسليم).
 // المبالغ بالهللات. الإعدادات والسائقون في data.json، وحالة التوصيل على صف الطلب في orders.db.
 const db = require('./db');
+const cur = require('./currency');
 const auth = require('./auth');
 const orders = require('./orders');
 const reports = require('./reports');
@@ -31,7 +32,7 @@ function saveConfig({ baseFee, freeOver, zones } = {}) {
   });
   db.get().settings.delivery = { baseFeeCents: base, freeOverCents: free, zones: Z };
   db.save();
-  auth.audit('delivery_config', `أجرة افتراضية ${(base / 100).toFixed(2)}، ${Z.length} منطقة${free ? '، مجاني فوق ' + (free / 100).toFixed(2) : ''}`);
+  auth.audit('delivery_config', `أجرة افتراضية ${cur.plain(base)}، ${Z.length} منطقة${free ? '، مجاني فوق ' + cur.plain(free) : ''}`);
   return config();
 }
 

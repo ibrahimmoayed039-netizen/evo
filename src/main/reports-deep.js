@@ -2,6 +2,7 @@
 // التكلفة تقدير: كمية الوصفة × تكلفة المكوّن الحالية (متوسط الشراء). الأصناف بلا وصفة تظهر بلا ربح ولا تُحتسب في الهامش.
 const orders = require('./orders');
 const db = require('./db');
+const cur = require('./currency');
 const reports = require('./reports');
 
 const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -75,7 +76,7 @@ function deep({ from, to } = {}) {
   };
 }
 
-const num = (c) => (c / 100).toFixed(2);
+const num = (c) => cur.plain(c);
 const cell = (v) => { let s = String(v ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const CLS = { star: 'نجم', horse: 'حصان عمل', puzzle: 'لغز', dog: 'ضعيف' };
 function toCsv(r) {

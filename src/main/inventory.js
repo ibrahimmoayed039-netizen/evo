@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const orders = require('./orders');
 const db = require('./db');
+const cur = require('./currency');
 const auth = require('./auth');
 
 const UNITS = { g: 'جرام', ml: 'مل', pcs: 'حبة' };
@@ -62,7 +63,7 @@ function list() {
 }
 const lowCount = () => (ready ? S().prepare('SELECT COUNT(*) AS n FROM ingredients WHERE active=1 AND min_qty>0 AND qty<=min_qty').get().n : 0);
 
-// unitCost: بالريال لكل وحدة أساسية (مثلاً 0.05 للجرام)
+// unitCost: بالدينار لكل وحدة أساسية (مثلاً 15 للجرام)
 function save({ id, name, unit, minQty = 0, unitCost = 0, qty = 0, active = true, category, supplier, packLabel }) {
   name = nm(name);
   const tx = (v, what) => { v = String(v ?? '').trim(); if (v.length > 60) throw new Error(`${what} طويل`); return v; };
@@ -118,7 +119,7 @@ function count(counts) {
     }
   })();
   const tot = diffs.reduce((s, x) => s + x.valueCents, 0);
-  auth.audit('stock_count', `${counts.length} مكوّن، ${diffs.length} فرق، قيمة الفروق ${(tot / 100).toFixed(2)}`);
+  auth.audit('stock_count', `${counts.length} مكوّن، ${diffs.length} فرق، قيمة الفروق ${cur.plain(tot)}`);
   return { checked: counts.length, diffs, totalCents: tot };
 }
 

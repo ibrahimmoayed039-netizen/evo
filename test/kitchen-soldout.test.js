@@ -2,7 +2,7 @@
 const { ok, eq, done } = require('./harness');
 const S = '../src/main/';
 const db = require(S + 'db'), auth = require(S + 'auth'), menu = require(S + 'menu'), orders = require(S + 'orders'), kitchen = require(S + 'kitchen');
-db.init(); orders.init(':memory:'); require(S + 'shifts').init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); require(S + 'shifts').init();
 auth.setupOwner('المالك', '1234'); auth.login(db.get().users[0].id, '1234');
 kitchen.saveStation({ name: 'ساخن' });
 menu.saveCategory({ name: 'وجبات', sort: 1 }); const cat = db.get().categories[0].id;

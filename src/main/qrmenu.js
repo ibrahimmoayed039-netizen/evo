@@ -52,7 +52,7 @@ main{padding:12px;max-width:720px;margin:0 auto}h2{font-size:18px;margin:16px 4p
 const SCRIPT = `(function(){
 var $=function(i){return document.getElementById(i)},M=null,cat='';
 function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
-function pr(c){return (c/100).toFixed(2)+' ر.س'}
+function pr(c){return Math.round(c/100).toLocaleString('en-US')+' '+'د.ع'}
 function draw(){
   $('t').textContent=M.restaurant;$('s').textContent=M.table?('طاولة '+M.table):'المنيو';document.title=M.restaurant;
   var n=$('n');n.textContent='';

@@ -3,7 +3,7 @@ const src = '../src/main/';
 const db = require(src + 'db'), auth = require(src + 'auth'), menu = require(src + 'menu'), orders = require(src + 'orders');
 const shifts = require(src + 'shifts'), reports = require(src + 'reports'), { can } = require(src + 'permissions'), { buildShiftHTML } = require(src + 'receipt');
 
-db.init(); orders.init(':memory:'); shifts.init();
+db.init(); db.get().settings.vatRate = 0.15; orders.init(':memory:'); shifts.init();
 auth.setupOwner('المالك', '1234');
 const owner = db.get().users[0];
 auth.login(owner.id, '1234');
