@@ -1,0 +1,154 @@
+/* =====================================================================
+   الطبقة الفاخرة (luxury layer) — تُحمَّل بعد theme3d.css وقبل responsive.css.
+   مظهر فقط، بلا أي تغيير في السلوك. لتعطيلها احذف سطر <link href="luxury.css">
+   وسطر fonts.css من index.html.
+
+   الفكرة: «جاد ليلي» عميق + نحاس/شمبانيا كخطوط رفيعة فقط، وزخرفة
+   هندسية (شبكة نجمة ثمانية) تظهر في مكانين فقط: الشاشة الجانبية والدخول.
+   بقية الواجهة هادئة ومنظّمة حتى يبقى العمل السريع على الكاشير مريحاً.
+   ===================================================================== */
+:root{
+  --lx-night:#06201F;--lx-night2:#0A2F2D;--lx-jade:#0F766E;--lx-jade2:#14918A;
+  --lx-brass:#C2A25F;--lx-brass-l:#E7D3A1;--lx-brass-d:#8F7338;
+  --lx-paper:#F3F5F3;
+  --lx-ring:0 0 0 3px rgba(194,162,95,.45);
+  --lx-sans:'Plex Arabic',Cairo,Tahoma,Arial,sans-serif;
+  --lx-display:'Reem Kufi','Plex Arabic',Tahoma,sans-serif;
+  --lx-lattice:url(art/lattice.svg);
+}
+
+/* ---------- الأساس: الخطوط والخلفية ---------- */
+body{font-family:var(--lx-sans);background:var(--lx-paper);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,select,input,textarea{font-family:inherit}
+h2,.big,.stat b,.dbk b,.kpi b,.rcard b{font-family:var(--lx-display);letter-spacing:0}
+h2{font-weight:700;font-size:28px}
+h3{font-family:var(--lx-sans);font-weight:700}
+#content{background:radial-gradient(900px 260px at 85% -60px,rgba(194,162,95,.10),transparent 70%)}
+#content>h2{position:relative;padding-bottom:12px;margin-bottom:20px}
+#content>h2::after{content:"";position:absolute;inset-inline-start:0;bottom:0;width:44px;height:3px;border-radius:3px;
+  background:linear-gradient(90deg,var(--lx-brass),var(--lx-brass-l))}
+::selection{background:rgba(194,162,95,.35)}
+*{scrollbar-width:thin;scrollbar-color:#9DB3AE transparent}
+
+/* ---------- الشاشة الجانبية ---------- */
+nav{
+  background:
+    linear-gradient(180deg,rgba(6,32,31,.35) 0%,rgba(6,32,31,.88) 100%),
+    var(--lx-lattice) 100% 0/80px 80px,
+    linear-gradient(185deg,var(--lx-night2) 0%,var(--lx-night) 100%);
+  box-shadow:-1px 0 0 rgba(194,162,95,.35),-14px 0 32px -12px rgba(6,32,31,.55);
+}
+nav::before{font-family:var(--lx-display);font-weight:700;font-size:21px;white-space:nowrap;color:var(--lx-brass-l);letter-spacing:.3px;
+  border-bottom:0;padding-bottom:20px;margin-bottom:14px;
+  background:linear-gradient(90deg,transparent,rgba(194,162,95,.7) 20%,rgba(194,162,95,.7) 80%,transparent) bottom/100% 1px no-repeat}
+nav .who{background:rgba(255,255,255,.045);border:1px solid rgba(194,162,95,.22);color:#D6E2DF}
+nav button{color:#B9CCC8;font-weight:500;letter-spacing:.1px}
+nav button:hover{background:rgba(231,211,161,.09);color:#fff}
+nav button.on{
+  background:linear-gradient(90deg,rgba(194,162,95,.22),rgba(194,162,95,.06));
+  color:var(--lx-brass-l);font-weight:700;box-shadow:inset 0 0 0 1px rgba(194,162,95,.28);
+}
+nav button.on::before{background:linear-gradient(180deg,var(--lx-brass-l),var(--lx-brass));width:4px;box-shadow:0 0 10px rgba(231,211,161,.55)}
+#logoutBtn{border:1px solid rgba(255,255,255,.14)!important;color:#D6E2DF}
+#logoutBtn:hover{background:rgba(185,28,28,.25)!important;border-color:rgba(248,113,113,.5)!important}
+
+/* ---------- البطاقات والإحصاءات ---------- */
+.card,.stat,.dbk,.dvc,.qc,.rcard,.kpi{
+  border:1px solid #DDE4E1;border-radius:16px;
+  box-shadow:0 1px 0 #fff inset,0 1px 2px rgba(6,32,31,.06),0 10px 24px -14px rgba(6,32,31,.22);
+}
+.stat:hover,.dbk:hover{box-shadow:0 1px 0 #fff inset,0 2px 4px rgba(6,32,31,.06),0 18px 32px -16px rgba(6,32,31,.3)}
+.kpi{border-inline-start:0;position:relative;overflow:hidden;background:linear-gradient(180deg,#fff,#FAFBFA)}
+.kpi::before{content:"";position:absolute;inset-inline:0;top:0;height:3px;background:linear-gradient(90deg,var(--lx-brass),var(--lx-brass-l) 60%,transparent)}
+.kpi b{font-weight:700;color:var(--lx-night2)}
+.kpi.warn::before{background:linear-gradient(90deg,#D97706,#FCD34D 60%,transparent)}.kpi.bad::before{background:linear-gradient(90deg,#B91C1C,#F87171 60%,transparent)}
+.kpi.warn,.kpi.bad{background:linear-gradient(180deg,#fff,#FAFBFA)}
+.dbk.main{background:linear-gradient(135deg,#EAF5F2,#fff 70%)}
+
+/* ---------- الأزرار ---------- */
+button{font-weight:600;letter-spacing:.1px}
+/* الأزرار الأساسية: داخل مجموعات الأفعال فقط حتى لا تمسّ بلاطات القائمة ولا التبويبات */
+:is(.acts,.drow,.stkbar,.quick)>button:not(.sec):not(.danger),td>button.sm:not(.sec):not(.danger),#pPay,#payOk,#sBtn,#cnOk,#invAdd{
+  background:linear-gradient(180deg,#12877F,#0C625B);box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 14px -8px rgba(12,98,91,.8)}
+:is(.acts,.drow,.stkbar,.quick)>button:not(.sec):not(.danger):hover,td>button.sm:not(.sec):not(.danger):hover,#pPay:hover,#payOk:hover,#sBtn:hover,#cnOk:hover,#invAdd:hover{
+  background:linear-gradient(180deg,#159188,#0D6B63)}
+button.sec{background:#fff;border:1px solid #CBD6D2;color:var(--lx-night2);box-shadow:0 1px 2px rgba(6,32,31,.06)}
+button.sec:hover{border-color:var(--lx-brass);background:#FBF8F0}
+button.danger{background:linear-gradient(180deg,#C62828,#9F1D1D);box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:0;box-shadow:var(--lx-ring)}
+input,select{border-color:#C9D5D1;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus{border-color:var(--lx-brass);box-shadow:var(--lx-ring);outline:0}
+
+/* ---------- التبويبات والفلاتر ---------- */
+.tabs button.on,.cats button.on,.seg button.on{
+  background:linear-gradient(180deg,var(--lx-night2),var(--lx-night));color:var(--lx-brass-l);
+  box-shadow:inset 0 0 0 1px rgba(194,162,95,.55),0 6px 14px -8px rgba(6,32,31,.7)}
+.tabs button:hover,.cats button:hover,.seg button:hover{border-color:var(--lx-brass);background:#FBF8F0}
+
+/* ---------- الجداول ---------- */
+#content table:not(.tt){border-radius:16px;border-color:#DDE4E1;box-shadow:0 10px 24px -16px rgba(6,32,31,.25)}
+#content table:not(.tt) th{background:linear-gradient(180deg,#F6F8F7,#ECF1EF);color:#4A5C62;font-weight:600;font-size:15px;
+  border-bottom:1px solid #CFDAD6}
+#content table:not(.tt) tbody tr:nth-child(even) td{background:#FBFCFB}
+#content table:not(.tt) tbody tr:hover td{background:#F3F8F6}
+#content table:not(.tt) td{border-bottom-color:#E7ECEA}
+
+/* ---------- النوافذ ---------- */
+dialog{border:0;border-radius:20px;padding:24px 26px;box-shadow:0 40px 80px -20px rgba(6,32,31,.55),0 0 0 1px rgba(194,162,95,.35);max-height:calc(100vh - 32px);overflow-y:auto}
+dialog::backdrop{background:rgba(6,24,24,.55);backdrop-filter:blur(3px)}
+dialog[open]::before{content:"";position:absolute;inset-inline:0;top:0;height:4px;background:linear-gradient(90deg,var(--lx-brass-d),var(--lx-brass-l),var(--lx-brass-d))}
+dialog h3{font-size:22px;margin-top:4px}
+#modal #box{border-radius:20px;box-shadow:0 40px 80px -20px rgba(6,32,31,.55),0 0 0 1px rgba(194,162,95,.35)}
+
+/* ---------- شاشة الدخول (الموضع الجريء الوحيد) ---------- */
+#login .brand{
+  background:
+    radial-gradient(520px 420px at 25% 105%,rgba(20,145,138,.55),transparent 68%),
+    radial-gradient(closest-side at 50% 34%,rgba(6,32,31,.92) 25%,rgba(6,32,31,.55) 70%,transparent 100%),
+    linear-gradient(180deg,transparent 45%,rgba(6,32,31,.8) 100%),
+    var(--lx-lattice) 50% 0/120px 120px,
+    linear-gradient(160deg,#0C3A37 0%,var(--lx-night) 70%);
+  border-inline-end:1px solid rgba(194,162,95,.5);
+}
+#login .brand b{font-family:var(--lx-display);font-weight:700;font-size:56px;line-height:1.25;color:#fff;text-shadow:0 2px 24px rgba(0,0,0,.35)}
+#login .brand span{color:var(--lx-brass-l);font-size:20px;font-weight:500}
+#login .login-side{background:radial-gradient(640px 420px at 80% 0,rgba(15,118,110,.09),transparent 70%),var(--lx-paper)}
+#login .card{border-radius:22px;border:1px solid #DDE4E1;box-shadow:0 30px 60px -28px rgba(6,32,31,.45),0 0 0 1px rgba(255,255,255,.8) inset;position:relative;overflow:hidden}
+#login .card::before{content:"";position:absolute;inset-inline:0;top:0;height:3px;background:linear-gradient(90deg,var(--lx-brass-d),var(--lx-brass-l),var(--lx-brass-d))}
+#login h2{font-size:26px}
+.users button{border-radius:14px;font-weight:600}
+.users button:hover,.users button.on{border-color:var(--lx-brass);background:linear-gradient(180deg,#fff,#FBF6E9)}
+.pad button{font-family:var(--lx-display);border-radius:16px}
+.pad button:hover{background:linear-gradient(180deg,#fff,#FBF6E9);border-color:var(--lx-brass)}
+.dots{color:var(--lx-brass-d)}
+#setup .card{border-radius:22px;border-top:3px solid var(--lx-brass)}
+
+
+/* ---------- زر الدفع: الذهب للمال فقط ---------- */
+#pPay,.acts #pPay,#payOk{background:linear-gradient(180deg,#EBD9A9,#C2A25F);color:#2A1F07;font-weight:800;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 10px 22px -10px rgba(143,115,56,.9)}
+#pPay:hover,.acts #pPay:hover,#payOk:hover{background:linear-gradient(180deg,#F1E1B7,#CBAA66)}
+
+/* ---------- الطاولات: جدار الصالة بلون الهوية ---------- */
+.floor::before{background:linear-gradient(180deg,var(--lx-night2),var(--lx-night));box-shadow:0 5px 10px -2px rgba(6,32,31,.35),inset 0 -1px 0 rgba(194,162,95,.6)}
+
+/* ---------- منع تجاوز الحقول لعرض اللوحة الضيقة ---------- */
+.drow input,.drow select,.prow input,.prow select,.pcrm input{min-width:0}
+
+/* ---------- الشارات والتنبيهات ---------- */
+.badge{font-weight:600}
+.card.warnb{border-color:#E9C98A;background:linear-gradient(180deg,#FFF9EC,#FFF4DB);color:#6B3F0A}
+
+/* ---------- الإشعارات المنبثقة ---------- */
+.toast{background:linear-gradient(180deg,var(--lx-night2),var(--lx-night));color:var(--lx-brass-l);border:1px solid rgba(194,162,95,.55);
+  border-radius:14px;box-shadow:0 18px 40px -16px rgba(6,32,31,.7);font-weight:600}
+
+/* ---------- حركة: لحظة واحدة عند فتح الصفحة، وتُحترم تفضيلات تقليل الحركة ---------- */
+@keyframes lx-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#content>*:first-child{animation:lx-rise .35s var(--ease,ease-out) both}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
+/* ---------- الطباعة: بلا زخارف ---------- */
+@media print{nav{display:none}#content{background:none}}

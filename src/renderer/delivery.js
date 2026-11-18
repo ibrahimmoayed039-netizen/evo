@@ -57,7 +57,7 @@ async function dvDrivers() {
   $('dvBody').innerHTML = `<div class="card"><b>${e ? 'تعديل سائق' : 'إضافة سائق'}</b>
     <div class="dvf"><div><label>الاسم *</label><input id="drName" value="${esc(e?.name || '')}"></div><div><label>الجوال</label><input id="drPhone" dir="ltr" value="${esc(e?.phone || '')}"></div>
      <div><label>طريقة الأجر</label><select id="drMode"><option value="fixed" ${e?.wageMode !== 'percent' ? 'selected' : ''}>مبلغ ثابت لكل توصيلة</option><option value="percent" ${e?.wageMode === 'percent' ? 'selected' : ''}>نسبة من أجرة التوصيل</option></select></div>
-     <div><label id="drWl">${e?.wageMode === 'percent' ? 'النسبة %' : 'المبلغ'}</label><input id="drWage" type="number" min="0" step="0.01" value="${e ? (e.wageMode === 'percent' ? e.wagePct : e.wageCents / 100) : ''}"></div></div>
+     <div><label id="drWl">${e?.wageMode === 'percent' ? 'النسبة %' : 'المبلغ'}</label><input id="drWage" type="number" min="0" step="any" value="${e ? (e.wageMode === 'percent' ? e.wagePct : e.wageCents / 100) : ''}"></div></div>
     <div id="drErr" class="err"></div><button id="drSave">${e ? 'حفظ' : 'إضافة'}</button>${e ? '<button class="sec" id="drCancel">إلغاء التعديل</button>' : ''}</div>
    <table><tr><th>الاسم</th><th>الجوال</th><th>الأجر</th><th>الحالة</th><th></th></tr>
    ${list.map((d) => `<tr><td>${esc(d.name)}</td><td dir="ltr">${esc(d.phone)}</td><td>${wtxt(d)}</td><td>${d.active ? 'مفعّل' : 'معطّل'}</td>
@@ -94,8 +94,8 @@ async function dvWages() {
 async function dvPricing() {
   const c = await api.deliveryConfig();
   $('dvBody').innerHTML = `<div class="card"><b>أجرة التوصيل</b>
-    <div class="dvf"><div><label>الأجرة الافتراضية (لمن لم تُحدد منطقته)</label><input id="pcBase" type="number" min="0" step="0.01" value="${c.baseFeeCents / 100}"></div>
-     <div><label>توصيل مجاني عند مجموع (بعد الخصم) ≥ (0 = معطّل)</label><input id="pcFree" type="number" min="0" step="0.01" value="${c.freeOverCents / 100}"></div></div>
+    <div class="dvf"><div><label>الأجرة الافتراضية (لمن لم تُحدد منطقته)</label><input id="pcBase" type="number" min="0" step="any" value="${c.baseFeeCents / 100}"></div>
+     <div><label>توصيل مجاني عند مجموع (بعد الخصم) ≥ (0 = معطّل)</label><input id="pcFree" type="number" min="0" step="any" value="${c.freeOverCents / 100}"></div></div>
     <label>المناطق — سطر لكل منطقة بصيغة: <span dir="ltr">الاسم | الأجرة</span></label>
     <textarea id="pcZones" rows="7" style="width:100%;font:inherit;padding:8px;border:1px solid #ccc;border-radius:6px">${esc(c.zones.map((z) => `${z.name} | ${z.feeCents / 100}`).join('\n'))}</textarea>
     <div id="pcErr" class="err"></div><button id="pcSave">حفظ</button></div>

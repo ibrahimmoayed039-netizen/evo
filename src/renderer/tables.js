@@ -103,7 +103,7 @@ function tableDialog(t, fl) {
    ${t.status !== 'free' ? `<p class="muted">جلوس منذ <b>${ago(t.seatedAt)}</b>${t.status === 'bill' ? ` — تنتظر الحساب منذ <b>${ago(t.billAt)}</b>` : ''}</p>` : ''}
    ${t.orders.map((o) => `<div class="orow"><b>#${o.number}</b> ${money(o.totalCents)} <small>${ago(o.createdAt)}</small>${o.billAt ? ' <span class="badge unpaid">🧾 طلب الحساب</span>' : ''}
      <button class="sm" data-res="${o.id}">متابعة</button><button class="sm ${o.billAt ? 'sec' : ''}" data-bl="${o.id}" data-on="${o.billAt ? 0 : 1}">${o.billAt ? 'إلغاء طلب الحساب' : 'طلب الحساب'}</button><button class="sm sec" data-sp="${o.id}">تقسيم</button><button class="sm sec" data-mv="${o.id}">نقل</button>${many ? `<button class="sm sec" data-mg="${o.id}">دمج</button>` : ''}</div>`).join('') || '<div class="muted">الطاولة فاضية</div>'}
-   <p><button id="taNew">${t.orders.length ? 'طلب جديد على الطاولة' : 'بدء طلب'}</button><button class="sec" id="taClose">إغلاق</button></p>`);
+   <p><button id="taNew">${t.orders.length ? 'إضافة أصناف لفاتورة الطاولة' : 'بدء طلب'}</button><button class="sec" id="taClose">إغلاق</button></p>`);
   const refresh = () => viewTables();
   d.querySelector('#taClose').onclick = dlgClose;
   d.querySelector('#taNew').onclick = () => { dlgClose(); resetPos(); P.type = 'dine_in'; P.tableId = t.id; open('pos'); };

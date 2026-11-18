@@ -1,7 +1,7 @@
 // واجهة إدارة المنيو (تعتمد على $ و esc و errMsg و me من renderer.js)
 let M = null, mTab = 'items', mEdit = null, mImg = '', mCat = '', mImgCleared = false, mVars = null;
 const KIND_L = { normal: 'عادي', combo: 'كومبو', weight: 'بالوزن', service: 'خدمة' };
-const sar = (c) => (c / 100).toFixed(2);
+const sar = (c) => curPlain(c); // قيمة حقل إدخال: رقم بلا فواصل
 
 async function viewMenu() { M = await api.menuGet(); mVars = null; mEdit = null; mImg = ''; mImgCleared = false; mVars = null; drawMenu(); }
 
@@ -34,11 +34,11 @@ function drawItems() {
     <label>التصنيف</label><select id="iCat">${M.categories.map((c) => `<option value="${esc(c.id)}" ${c.id === (e.categoryId || mCat) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
     <label>نوع الصنف</label><select id="iKind">${Object.entries(KIND_L).map(([k, l]) => `<option value="${k}" ${k === (e.kind || 'normal') ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <label>الباركود (اختياري)</label><input id="iBar" value="${esc(e.barcode)}">
-    <label>السعر (ر.س) <small class="muted-l">${vars.length ? 'يُؤخذ من النوع الافتراضي' : 'سعر واحد'}</small></label><input id="iPrice" type="number" step="0.01" min="0" ${vars.length ? 'readonly' : ''} value="${vars.length ? esc((vars.find((v) => v.isDefault) || vars[0]).price) : (e.priceCents != null ? sar(e.priceCents) : '')}">
+    <label>السعر (${CUR.symbol}) <small class="muted-l">${vars.length ? 'يُؤخذ من النوع الافتراضي' : 'سعر واحد'}</small></label><input id="iPrice" type="number" step="any" min="0" ${vars.length ? 'readonly' : ''} value="${vars.length ? esc((vars.find((v) => v.isDefault) || vars[0]).price) : (e.priceCents != null ? sar(e.priceCents) : '')}">
     <div class="vbox"><b>الأحجام والأنواع</b> <small class="muted-l">اتركها فارغة لسعر واحد. النوع الافتراضي يظهر أولاً في الكاشير.</small>
      ${vars.length ? `<table class="vt"><tr><th>النوع / الحجم</th><th>السعر</th><th>التكلفة</th><th>الرمز</th><th>افتراضي</th><th>نفد</th><th></th></tr>
-     ${vars.map((v, n) => `<tr><td><input data-vf="name" data-n="${n}" value="${esc(v.name)}"></td><td><input data-vf="price" data-n="${n}" type="number" step="0.01" min="0" value="${esc(v.price)}"></td>
-      <td><input data-vf="cost" data-n="${n}" type="number" step="0.01" min="0" value="${esc(v.cost)}"></td><td><input data-vf="sku" data-n="${n}" value="${esc(v.sku)}"></td>
+     ${vars.map((v, n) => `<tr><td><input data-vf="name" data-n="${n}" value="${esc(v.name)}"></td><td><input data-vf="price" data-n="${n}" type="number" step="any" min="0" value="${esc(v.price)}"></td>
+      <td><input data-vf="cost" data-n="${n}" type="number" step="any" min="0" value="${esc(v.cost)}"></td><td><input data-vf="sku" data-n="${n}" value="${esc(v.sku)}"></td>
       <td><input type="radio" name="vDef" data-vd="${n}" ${v.isDefault ? 'checked' : ''}></td><td><input type="checkbox" data-vs="${n}" ${v.soldOut ? 'checked' : ''}></td>
       <td><button class="sm danger" data-vx="${n}">✕</button></td></tr>`).join('')}</table>` : ''}
      <button class="sm sec" id="vAdd">+ إضافة نوع</button></div>
@@ -51,7 +51,7 @@ function drawItems() {
    <label>عرض تصنيف</label><select id="fCat"><option value="">الكل</option>${M.categories.map((c) => `<option value="${esc(c.id)}" ${c.id === mCat ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
    <table><tr><th></th><th>الصنف</th><th>التصنيف</th><th>السعر</th><th>الحالة</th><th></th></tr>
    ${list.map((i) => `<tr><td>${i.image ? `<img class="thumb" src="${esc(i.image)}">` : ''}</td><td>${esc(i.name)}</td>
-    <td>${esc(M.categories.find((c) => c.id === i.categoryId)?.name)}</td><td>${(i.variants || []).length > 1 ? sar(Math.min(...i.variants.map((v) => v.priceCents))) + ' – ' + sar(Math.max(...i.variants.map((v) => v.priceCents))) : sar(i.priceCents)}${(i.variants || []).length ? ` <small class="muted-l">${i.variants.length} أنواع</small>` : ''}</td>
+    <td>${esc(M.categories.find((c) => c.id === i.categoryId)?.name)}</td><td>${(i.variants || []).length > 1 ? money(Math.min(...i.variants.map((v) => v.priceCents))) + ' – ' + money(Math.max(...i.variants.map((v) => v.priceCents))) : money(i.priceCents)}${(i.variants || []).length ? ` <small class="muted-l">${i.variants.length} أنواع</small>` : ''}</td>
     <td>${i.active ? '' : 'مخفي '}${i.soldOut ? '<span class="so">نفد</span>' : ''}</td>
     <td><button class="sm" data-ed="${esc(i.id)}">تعديل</button>
         <button class="sm sec" data-so="${esc(i.id)}">${i.soldOut ? 'متوفر' : 'نفد'}</button>
@@ -143,7 +143,7 @@ function drawGroups() {
     <button id="gSave">حفظ</button>${e.id ? '<button class="sec" id="gCancel">إلغاء</button>' : ''}</div>
    <table><tr><th>المجموعة</th><th>الخيارات</th><th></th></tr>
    ${M.modGroups.map((g) => `<tr><td>${esc(g.name)}${g.required ? ' (إجباري)' : ''}</td>
-    <td>${g.options.map((o) => `${esc(o.name)}${o.priceCents ? ' +' + sar(o.priceCents) : ''}`).join('، ')}</td>
+    <td>${g.options.map((o) => `${esc(o.name)}${o.priceCents ? ' +' + money(o.priceCents) : ''}`).join('، ')}</td>
     <td><button class="sm" data-ed="${esc(g.id)}">تعديل</button> <button class="sm danger" data-del="${esc(g.id)}">حذف</button></td></tr>`).join('')}</table>`;
   $('gSave').onclick = () => mrun(() => api.saveGroup({
     id: e.id, name: $('gName').value, required: $('gReq').checked, multi: $('gMulti').checked,

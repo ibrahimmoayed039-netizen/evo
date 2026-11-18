@@ -1,5 +1,5 @@
 // واجهة الكاشير + قائمة الطلبات (تعتمد على $ و esc و errMsg و me و can و open من renderer.js)
-const money = (c) => (c / 100).toFixed(2);
+const money = (c) => curFmt(c);
 const TYPE_L = { dine_in: 'صالة', takeaway: 'سفري', delivery: 'توصيل' };
 const STATUS_L = { open: 'مفتوح', paid: 'مدفوع', void: 'ملغي' };
 const METHOD_L = { cash: 'نقدي', card: 'بطاقة', other: 'أخرى' };
@@ -65,7 +65,7 @@ function drawPos() {
     <div id="pFields"></div>
     ${can('customers') ? '<div id="pCrm" class="pcrm"></div>' : ''}
     <div id="pLines" class="lines"></div>
-    ${can('discount') ? `<div class="drow"><label>خصم</label><select id="dType"><option value="percent" ${P.disc.type === 'percent' ? 'selected' : ''}>%</option><option value="fixed" ${P.disc.type === 'fixed' ? 'selected' : ''}>مبلغ</option></select><input id="dVal" type="number" min="0" step="0.01" value="${esc(P.disc.value)}"></div>` : ''}
+    ${can('discount') ? `<div class="drow"><label>خصم</label><select id="dType"><option value="percent" ${P.disc.type === 'percent' ? 'selected' : ''}>%</option><option value="fixed" ${P.disc.type === 'fixed' ? 'selected' : ''}>مبلغ</option></select><input id="dVal" type="number" min="0" step="any" value="${esc(P.disc.value)}"></div>` : ''}
     <div id="pTot"></div><div id="pErr" class="err"></div>
     <div class="acts"><button id="pPay">دفع</button><button class="sec" id="pSave">حفظ كمفتوح</button>${P.kitchen ? '<button class="sec" id="pKit">إرسال للمطبخ</button>' : ''}<button class="sec" id="pClear">${P.orderId ? 'طلب جديد' : 'مسح'}</button></div>
    </div>
@@ -89,7 +89,7 @@ function drawFields() {
     const dc = P.dcfg || { baseFeeCents: 0, zones: [] };
     if (!dc.zones.some((z) => z.id === P.zoneId)) P.zoneId = ''; // منطقة محذوفة من الإعدادات
     const zone = dc.zones.length ? `<select id="fZone"><option value="">منطقة التوصيل — الأجرة الافتراضية ${money(dc.baseFeeCents)}</option>${dc.zones.map((z) => `<option value="${esc(z.id)}" ${P.zoneId === z.id ? 'selected' : ''}>${esc(z.name)} — ${money(z.feeCents)}</option>`).join('')}</select>` : '';
-    const fee = can('discount') ? `<input id="fFee" type="number" min="0" step="0.01" placeholder="أجرة توصيل مخصصة (فارغ = تلقائي)" value="${P.feeOv == null ? '' : esc(P.feeOv)}">` : '';
+    const fee = can('discount') ? `<input id="fFee" type="number" min="0" step="any" placeholder="أجرة توصيل مخصصة (فارغ = تلقائي)" value="${P.feeOv == null ? '' : esc(P.feeOv)}">` : '';
     f.innerHTML = `<input id="fName" placeholder="اسم العميل" value="${esc(P.cust.name)}"><input id="fPhone" placeholder="الجوال *" dir="ltr" value="${esc(P.cust.phone)}"><input id="fAddr" placeholder="العنوان" value="${esc(P.cust.address)}">${zone}${fee}`;
     if ($('fZone')) $('fZone').onchange = () => { P.zoneId = $('fZone').value; requote(); };
     if ($('fFee')) $('fFee').oninput = () => { P.feeOv = $('fFee').value; requote(); };
@@ -198,9 +198,9 @@ function drawTotals() {
   const q = P.quote;
   $('pTot').innerHTML = q ? `<table class="tt"><tr><td>المجموع</td><td>${money(q.subtotalCents)}</td></tr>
     ${q.discountCents ? `<tr><td>الخصم</td><td>-${money(q.discountCents)}</td></tr>` : ''}
-    <tr><td>الضريبة (${Math.round(q.vatRate * 100)}%)</td><td>${money(q.vatCents)}</td></tr>
+    ${q.vatCents ? `<tr><td>الضريبة (${Math.round(q.vatRate * 100)}%)</td><td>${money(q.vatCents)}</td></tr>` : ''}
     ${q.deliveryFeeCents ? `<tr><td>أجرة التوصيل${q.deliveryZone ? ' (' + esc(q.deliveryZone) + ')' : ''}</td><td>${money(q.deliveryFeeCents)}</td></tr>` : q.freeDelivery ? '<tr><td>أجرة التوصيل</td><td>مجاناً</td></tr>' : ''}
-    <tr class="g"><td>الإجمالي</td><td>${money(q.totalCents)} ر.س</td></tr></table>` : '';
+    <tr class="g"><td>الإجمالي</td><td>${money(q.totalCents)} ${CUR.symbol}</td></tr></table>` : '';
 }
 
 // ---------- حفظ / دفع ----------
@@ -240,10 +240,10 @@ function payDialog(o) {
   const d = dlgOpen('');
   const draw = () => {
     const diff = sum(rows) - o.totalCents;
-    d.innerHTML = `<h3>دفع طلب #${o.number}</h3><div class="big">${money(o.totalCents)} ر.س</div>${cr ? `<div class="muted">👤 ${esc(cr.name)}${usePts ? ` — ${cr.points} نقطة (${money(cr.points * pv)} ر.س)` : ''}</div>` : ''}
+    d.innerHTML = `<h3>دفع طلب #${o.number}</h3><div class="big">${money(o.totalCents)} ${CUR.symbol}</div>${cr ? `<div class="muted">👤 ${esc(cr.name)}${usePts ? ` — ${cr.points} نقطة (${money(cr.points * pv)} ${CUR.symbol})` : ''}</div>` : ''}
       ${rows.map((r, i) => `<div class="prow"><select data-pm="${i}">${Object.entries(labels).map(([k, l]) => `<option value="${k}" ${r.method === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
         ${r.method === 'gift' ? `<input data-pc="${i}" dir="ltr" placeholder="رمز الكرت" value="${esc(r.code)}">` : ''}
-        <input data-pa="${i}" type="number" min="0" step="0.01" value="${esc(r.amount)}">${rows.length > 1 ? `<button class="sm danger" data-pr="${i}">✕</button>` : ''}</div>
+        <input data-pa="${i}" type="number" min="0" step="any" value="${esc(r.amount)}">${rows.length > 1 ? `<button class="sm danger" data-pr="${i}">✕</button>` : ''}</div>
         ${r.method === 'gift' ? `<div class="muted" id="gb${i}" style="padding:0"></div>` : ''}`).join('')}
       <div class="quick"><button class="sm sec" id="qCash">كامل نقداً</button><button class="sm sec" id="qCard">كامل بطاقة</button>${usePts && cr.points ? '<button class="sm sec" id="qPts">استخدم النقاط</button>' : ''}<button class="sm sec" id="qAdd">+ دفعة</button></div>
       <div class="${diff < 0 ? 'err' : 'ok'}">${diff < 0 ? `المتبقي ${money(-diff)}` : diff > 0 ? `الباقي للعميل ${money(diff)}` : 'المبلغ مطابق'}</div>
@@ -258,7 +258,7 @@ function payDialog(o) {
       i.oninput = () => { rows[+i.dataset.pc].code = i.value; };
       i.onchange = async () => { // عرض رصيد الكرت فور إدخال الرمز
         const out = d.querySelector('#gb' + i.dataset.pc);
-        try { const c = await api.giftGet(i.value); out.textContent = c.status !== 'active' || c.expired ? 'الكرت ملغي أو منتهي' : `رصيد الكرت ${money(c.balanceCents)} ر.س`; } catch (e) { out.textContent = errMsg(e); }
+        try { const c = await api.giftGet(i.value); out.textContent = c.status !== 'active' || c.expired ? 'الكرت ملغي أو منتهي' : `رصيد الكرت ${money(c.balanceCents)} ${CUR.symbol}`; } catch (e) { out.textContent = errMsg(e); }
       };
     });
     d.querySelectorAll('[data-pr]').forEach((b) => (b.onclick = () => { rows.splice(+b.dataset.pr, 1); draw(); }));
@@ -305,7 +305,7 @@ async function viewOrders() {
    <div class="tabs">${F.map(([k, l]) => `<button data-f="${k}" class="${k === oFilter ? 'on' : ''}">${l}</button>`).join('')}
    <select id="oDays" style="width:auto"><option value="1" ${oDays === 1 ? 'selected' : ''}>اليوم</option><option value="7" ${oDays === 7 ? 'selected' : ''}>آخر 7 أيام</option><option value="30" ${oDays === 30 ? 'selected' : ''}>آخر 30 يوماً</option></select></div>
    <table><tr><th>#</th><th>الوقت</th><th>النوع</th><th>الإجمالي</th><th>الحالة</th><th></th></tr>
-   ${rows.map((o) => `<tr><td>${o.number}</td><td>${new Date(o.createdAt).toLocaleString('ar-SA')}</td><td>${TYPE_L[o.type]}${o.table ? ' ' + esc(o.table) : ''}</td>
+   ${rows.map((o) => `<tr><td>${o.number}</td><td>${new Date(o.createdAt).toLocaleString('ar-IQ')}</td><td>${TYPE_L[o.type]}${o.table ? ' ' + esc(o.table) : ''}</td>
     <td>${money(o.totalCents)}</td><td>${STATUS_L[o.status]}${o.status === 'paid' && o.payments?.length ? '' : ''}</td>
     <td>${o.status === 'open' ? `<button class="sm" data-res="${o.id}">متابعة</button> ` : ''}${o.status === 'open' && can('tables') ? `<button class="sm sec" data-sp="${o.id}">تقسيم</button> ` : ''}${can('print') ? `<button class="sm sec" data-rc="${o.id}">إيصال</button> ` : ''}${o.status !== 'void' ? `<button class="sm danger" data-vd="${o.id}" data-st="${o.status}">إلغاء</button>` : ''}</td></tr>`).join('')}</table>
    ${rows.length ? '' : '<div class="card">لا توجد طلبات.</div>'}<div id="oErr" class="err"></div>`;

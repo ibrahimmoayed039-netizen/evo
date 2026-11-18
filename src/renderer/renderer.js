@@ -59,7 +59,6 @@ const VIEWS = [
   { id: 'orders', label: 'الطلبات', perm: 'pos', render: viewOrders },
   { id: 'delivery', label: 'التوصيل', perm: 'delivery', render: viewDelivery },
   { id: 'reservations', label: 'الحجوزات', perm: 'reservations', render: viewReservations },
-  { id: 'customers', label: 'العملاء', perm: 'customers', render: viewCustomers },
   { id: 'shift', label: 'الوردية', perm: 'shift', render: viewShift },
   { id: 'reports', label: 'التقارير', perm: 'reports', render: viewReports },
   { id: 'inventory', label: 'المخزون', perm: 'inventory', render: viewInventory },
@@ -140,13 +139,13 @@ async function viewUsers() {
 async function viewAudit() {
   const rows = await api.listAudit();
   $('content').innerHTML = `<h2>سجل العمليات</h2><table><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr>
-   ${rows.map((r) => `<tr><td>${new Date(r.ts).toLocaleString('ar-SA')}</td><td>${esc(r.userName)}</td><td>${esc(r.action)}</td><td>${esc(r.detail)}</td></tr>`).join('')}</table>`;
+   ${rows.map((r) => `<tr><td>${new Date(r.ts).toLocaleString('ar-IQ')}</td><td>${esc(r.userName)}</td><td>${esc(r.action)}</td><td>${esc(r.detail)}</td></tr>`).join('')}</table>`;
 }
 
 // ---------- صفحة الطباعة (اختبار) ----------
 const sampleOrder = () => ({
-  restaurant: 'اسم المطعم', number: 1001, date: new Date().toLocaleString('ar-SA'),
-  type: 'صالة', table: '5', vatRate: 0.15, discount: 0,
+  restaurant: 'اسم المطعم', number: 1001, date: new Date().toLocaleString('ar-IQ'),
+  type: 'صالة', table: '5', vatRate: 0, discount: 0,
   items: [{ name: 'برجر لحم', qty: 2, price: 28 }, { name: 'بطاطس', qty: 1, price: 10 }, { name: 'عصير برتقال', qty: 2, price: 12 }],
 });
 async function viewPrint() {

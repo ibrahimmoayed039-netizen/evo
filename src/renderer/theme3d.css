@@ -55,7 +55,7 @@
 /* لمعة سطح الطاولة */
 .floor .tbl::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:linear-gradient(135deg,rgba(255,255,255,.5) 0,rgba(255,255,255,0) 44%)}
-.floor .tbl b{font-size:16px;font-weight:800;position:relative}
+.floor .tbl b{font-size:19px;font-weight:800;position:relative}
 .floor .tbl span,.floor .tbl small{position:relative}
 
 /* الكراسي: مقعد + مسند يدور حسب موضع الكرسي (--a يُحسب في tables.js) */
@@ -115,7 +115,7 @@
 .tile img,.tile .ph{width:78px;height:78px;border-radius:50%;object-fit:cover;
   box-shadow:0 0 0 5px #fff,0 0 0 6px rgba(14,26,36,.1),0 12px 12px -6px rgba(14,26,36,.45);transition:transform .2s var(--ease)}
 .tile:hover img,.tile:hover .ph{transform:scale(1.06) rotate(-4deg)}
-.tile .ph{display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;line-height:1;
+.tile .ph{display:flex;align-items:center;justify-content:center;font-size:33px;font-weight:800;line-height:1;
   color:var(--cc,var(--pri));text-shadow:0 2px 0 rgba(255,255,255,.9);
   background:radial-gradient(circle at 34% 26%,#fff 0 32%,#E7EFED 100%);
   box-shadow:inset 0 0 0 9px #F7FAF9,inset 0 0 0 10px #D4DFDC,inset 0 -8px 12px rgba(14,26,36,.1),0 0 0 5px #fff,0 0 0 6px rgba(14,26,36,.1),0 12px 12px -6px rgba(14,26,36,.45)}

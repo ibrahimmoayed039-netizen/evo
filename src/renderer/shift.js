@@ -1,13 +1,13 @@
 // صفحة الوردية: فتح/إغلاق، إيداع/مصروف، تقرير X/Z، وسجل الورديات (تعتمد على $ و esc و errMsg و can من renderer.js، و money/dlgOpen/dlgClose/flash/loadPrintOpts من pos.js)
 const MV_L = { in: 'إيداع', out: 'مصروف' };
-const fmtT = (iso) => (iso ? new Date(iso).toLocaleString('ar-SA') : '-');
+const fmtT = (iso) => (iso ? new Date(iso).toLocaleString('ar-IQ') : '-');
 const PAY_L = { cash: 'نقدي', card: 'بطاقة', other: 'أخرى' };
 
 function shiftBox(s) {
   const R = (a, b, cls = '') => `<tr class="${cls}"><td>${a}</td><td>${b}</td></tr>`;
   const diff = s.diffCents;
   return `<table class="tt">
-   ${R('عدد الطلبات', s.sales.count)}${R('المجموع قبل الخصم', money(s.sales.subtotalCents))}${R('الخصومات', '-' + money(s.sales.discountCents))}${R('الضريبة', money(s.sales.vatCents))}
+   ${R('عدد الطلبات', s.sales.count)}${R('المجموع قبل الخصم', money(s.sales.subtotalCents))}${R('الخصومات', '-' + money(s.sales.discountCents))}${s.sales.vatCents ? R('الضريبة', money(s.sales.vatCents)) : ''}
    ${R('إجمالي المبيعات', money(s.sales.totalCents), 'g')}${R(`المرتجعات (${s.refunds.count})`, '-' + money(s.refunds.totalCents))}${R('الصافي', money(s.netCents), 'g')}</table>
    <b>طرق الدفع (صافي)</b><table class="tt">${['cash', 'card', 'other'].map((k) => R(PAY_L[k], money(s.payments[k].netCents))).join('')}</table>
    <b>الصندوق (نقدي)</b><table class="tt">
@@ -38,7 +38,7 @@ function shiftDialog(s, title) {
 }
 
 function cashMoveDialog(type) {
-  const d = dlgOpen(`<h3>${MV_L[type]} نقدي</h3><label>المبلغ</label><input id="mvAmt" type="number" min="0" step="0.01" inputmode="decimal">
+  const d = dlgOpen(`<h3>${MV_L[type]} نقدي</h3><label>المبلغ</label><input id="mvAmt" type="number" min="0" step="any" inputmode="decimal">
    <label>السبب</label><input id="mvWhy" maxlength="120" placeholder="${type === 'out' ? 'مثال: شراء ثلج' : 'مثال: تغذية الصندوق'}">
    <div id="mvErr" class="err"></div><div class="acts"><button id="mvOk">حفظ</button><button class="sec" id="mvNo">إلغاء</button></div>`);
   d.querySelector('#mvNo').onclick = dlgClose;
@@ -52,7 +52,7 @@ function closeShiftDialog(s) {
   const d = dlgOpen(`<h3>إغلاق الوردية #${s.id}</h3>
    ${s.openOrders ? `<p class="err">تنبيه: يوجد ${s.openOrders} طلب مفتوح غير مدفوع. سيبقى مفتوحاً وسيُنسب دفعه للوردية التالية.</p>` : ''}
    <p>عُدّ النقد الموجود فعلياً في الدرج وأدخله:</p>
-   <label>النقد المعدود</label><input id="clAmt" type="number" min="0" step="0.01" inputmode="decimal" autofocus>
+   <label>النقد المعدود</label><input id="clAmt" type="number" min="0" step="any" inputmode="decimal" autofocus>
    <label>ملاحظة (اختياري)</label><input id="clNote" maxlength="200">
    <div id="clErr" class="err"></div><div class="acts"><button id="clOk" class="danger">إغلاق الوردية</button><button class="sec" id="clNo">إلغاء</button></div>`);
   d.querySelector('#clNo').onclick = dlgClose;
@@ -70,7 +70,7 @@ async function viewShift() {
   $('content').innerHTML = `<h2>الوردية</h2>
    ${s ? `<div class="card"><p>وردية #${s.id} مفتوحة منذ ${esc(fmtT(s.openedAt))} — ${esc(s.openedBy || '-')}</p>${shiftBox(s)}
       <div class="acts"><button id="shIn" class="sec">+ إيداع</button><button id="shOut" class="sec">− مصروف</button>${can('print') ? '<button id="shPrintX" class="sec">طباعة X</button>' : ''}<button id="shClose" class="danger">إغلاق الوردية</button></div></div>`
-     : `<div class="card"><p>لا توجد وردية مفتوحة.</p><label>رصيد الافتتاح (النقد في الدرج)</label><input id="shOpen" type="number" min="0" step="0.01" value="0" inputmode="decimal">
+     : `<div class="card"><p>لا توجد وردية مفتوحة.</p><label>رصيد الافتتاح (النقد في الدرج)</label><input id="shOpen" type="number" min="0" step="any" value="0" inputmode="decimal">
       <div id="shErr" class="err"></div><button id="shOpenBtn">فتح الوردية</button></div>`}
    ${can('settings') ? `<div class="card"><label class="chk"><input type="checkbox" id="shReq" ${requireShift ? 'checked' : ''}> اشتراط وردية مفتوحة قبل أي دفع</label></div>` : ''}
    ${history.length ? `<h3>الورديات السابقة</h3><table><tr><th>#</th><th>الفتح</th><th>الإغلاق</th><th>المتوقع</th><th>المعدود</th><th>الفرق</th><th></th></tr>

@@ -29,25 +29,167 @@ async function viewInventory() {
 const invFail = (e) => { const x = $('invErr'); if (x) x.textContent = errMsg(e); };
 
 // ---------- المخزون ----------
-function tabStock(d) {
+const STK_L = { out: 'نفد', low: 'منخفض', warn: 'يقترب من الحد', ok: 'متوفر', off: 'معطّل' };
+const EMPTY_ROW = '<tr><td colspan="8" class="muted">لا نتائج مطابقة للفلتر الحالي.</td></tr>';
+const STK_ORD = { out: 0, low: 1, warn: 2, ok: 3, off: 4 };
+const stkState = (i) => (!i.active ? 'off' : i.qty <= 0 ? 'out' : i.low ? 'low' : i.minQty > 0 && i.qty <= i.minQty * 1.5 ? 'warn' : 'ok');
+// مستوى الشريط: الحد الأدنى = ثلث الشريط (فوق ثلاثة أضعافه يمتلئ)
+const stkPct = (i) => (i.minQty > 0 ? Math.max(0, Math.min(100, Math.round((i.qty / (i.minQty * 3)) * 100))) : i.qty > 0 ? 100 : 0);
+const stkBadge = (st) => `<span class="sbadge ${st}">${STK_L[st]}</span>`;
+
+// الأصناف التي تستهلك المكوّن: { ingId: [{ name, qty }] }
+function stkUsage(d, m) {
+  const names = {};
+  ((m && m.items) || []).forEach((it) => { names[it.id] = it.name; (it.variants || []).forEach((v) => (names[`${it.id}#${v.id}`] = `${it.name} · ${v.name}`)); });
+  const u = {};
+  Object.entries(d.recipes || {}).forEach(([k, lines]) => lines.forEach((l) => (u[l.ingredientId] ||= []).push({ name: names[k] || k, qty: l.qty })));
+  return u;
+}
+// متوسط الاستهلاك اليومي من حركات البيع آخر 14 يوماً → { ingId: وحدة/يوم }
+function stkDaily(moves) {
+  const since = Date.now() - 14 * 864e5, acc = {}; let oldest = Date.now();
+  (moves || []).forEach((r) => {
+    if (r.reason !== 'sale' && r.reason !== 'void') return;
+    const t = new Date(r.createdAt).getTime(); if (!(t >= since)) return;
+    oldest = Math.min(oldest, t); acc[r.ingredientId] = (acc[r.ingredientId] || 0) - r.delta;
+  });
+  const days = Math.max(1, Math.min(14, (Date.now() - oldest) / 864e5)), out = {};
+  Object.entries(acc).forEach(([k, v]) => { if (v > 0) out[k] = v / days; });
+  return out;
+}
+const stkCover = (i, daily) => {
+  if (!i.active) return '—';
+  const r = daily[i.id]; if (!r) return '<small class="muted">—</small>';
+  const dd = i.qty / r; if (dd <= 0) return '<b class="err">نفد</b>';
+  const t = dd < 1 ? 'أقل من يوم' : `≈ ${Math.round(dd)} يوم`;
+  return dd < 3 ? `<b class="err">${t}</b>` : dd < 7 ? `<b style="color:var(--warn)">${t}</b>` : t;
+};
+
+async function tabStock(d, m) {
+  INV.f ||= ''; INV.sort ||= 'need'; INV.q ||= '';
+  let moves = [];
+  try { moves = await api.invMoves(undefined, 500); } catch (e) { /* التقدير اختياري */ }
+  const daily = stkDaily(moves), usage = stkUsage(d, m);
   const cats = [...new Set(d.ingredients.map((i) => i.category).filter(Boolean))];
   if (INV.cat && !cats.includes(INV.cat)) INV.cat = '';
-  const shown = d.ingredients.filter((i) => !INV.cat || i.category === INV.cat);
-  const tot = d.ingredients.filter((i) => i.active).reduce((s, i) => s + i.valueCents, 0);
-  $('invBody').innerHTML = `<div class="drow"><input id="invQ" placeholder="بحث بالاسم"><button id="invAdd">+ مكوّن</button></div><p class="muted">قيمة المخزون التقديرية: <b>${money(tot)}</b></p>
-   ${cats.length ? `<div class="tabs"><button data-ct="" class="${INV.cat ? '' : 'on'}">الكل</button>${cats.map((c) => `<button data-ct="${esc(c)}" class="${INV.cat === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>` : ''}
-   <table><tr><th>المكوّن</th><th>التصنيف</th><th>وحدة الشراء</th><th>الكمية</th><th>الحد الأدنى</th><th>التكلفة</th><th>القيمة</th><th></th></tr><tbody id="invRows">
-   ${shown.map((i) => `<tr data-n="${esc(i.name.toLowerCase())}" class="${i.low ? 'lowr' : ''} ${i.active ? '' : 'off'}"><td>${esc(i.name)}${i.active ? '' : ' <small>(معطّل)</small>'}</td><td>${esc(i.category || '—')}</td><td>${esc(i.packLabel || '—')}</td><td>${qtyFmt(i.qty, i.unit)}</td><td>${i.minQty ? qtyFmt(i.minQty, i.unit) : '-'}</td>
-    <td>${costLabel(i)}</td><td>${money(i.valueCents)}</td>
-    <td><button class="sm" data-ia="${esc(i.id)}">+ إضافة</button> <button class="sm sec" data-iw="${esc(i.id)}">هدر</button> <button class="sm sec" data-ie="${esc(i.id)}">تعديل</button></td></tr>`).join('')}</tbody></table>
+  const act = d.ingredients.filter((i) => i.active), cnt = { out: 0, low: 0, warn: 0, ok: 0, off: 0 };
+  d.ingredients.forEach((i) => cnt[stkState(i)]++);
+  const tot = act.reduce((s, i) => s + i.valueCents, 0);
+  const FL = [['', 'الكل', d.ingredients.length], ['need', 'يحتاج طلب', cnt.out + cnt.low], ['out', 'نفد', cnt.out], ['warn', 'يقترب', cnt.warn], ['ok', 'متوفر', cnt.ok], ['off', 'معطّل', cnt.off]];
+  const view = () => {
+    const q = (INV.q || '').trim().toLowerCase();
+    let L = d.ingredients.filter((i) => (!INV.cat || i.category === INV.cat)
+      && (!INV.f || (INV.f === 'need' ? ['out', 'low'].includes(stkState(i)) : stkState(i) === INV.f))
+      && (!q || [i.name, i.category, i.supplier].some((x) => (x || '').toLowerCase().includes(q))));
+    const ratio = (i) => (i.minQty > 0 ? i.qty / i.minQty : 99);
+    L = L.slice().sort(INV.sort === 'value' ? (a, b) => b.valueCents - a.valueCents
+      : INV.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ar')
+        : (a, b) => STK_ORD[stkState(a)] - STK_ORD[stkState(b)] || ratio(a) - ratio(b) || a.name.localeCompare(b.name, 'ar'));
+    return L;
+  };
+  const rowHtml = (i) => {
+    const st = stkState(i), n = (usage[i.id] || []).length;
+    return `<tr class="stk-${st} ${i.low ? 'lowr' : ''} ${i.active ? '' : 'off'}" data-id="${esc(i.id)}">
+     <td><b>${esc(i.name)}</b><small class="muted sub">${esc([i.category, i.supplier].filter(Boolean).join(' · ') || 'بدون تصنيف')}${n ? ` · في ${n} صنف` : ''}</small></td>
+     <td>${stkBadge(st)}<div class="lvl" title="المستوى مقارنة بالحد الأدنى"><i style="width:${stkPct(i)}%"></i></div></td>
+     <td class="qtyc">${qtyFmt(i.qty, i.unit)}</td><td>${i.minQty ? qtyFmt(i.minQty, i.unit) : '<small class="muted">بلا تنبيه</small>'}</td>
+     <td>${stkCover(i, daily)}</td><td>${costLabel(i)}${i.packLabel ? `<small class="muted sub">${esc(i.packLabel)}</small>` : ''}</td><td>${money(i.valueCents)}</td>
+     <td class="racts"><button class="sm" data-ia="${esc(i.id)}">+ إضافة</button> <button class="sm sec" data-iw="${esc(i.id)}">هدر</button> <button class="sm sec" data-id2="${esc(i.id)}">تفاصيل</button></td></tr>`;
+  };
+  const by = (id) => d.ingredients.find((x) => x.id === id);
+  const wire = () => {
+    document.querySelectorAll('[data-id2]').forEach((b) => (b.onclick = () => stockDetail(by(b.dataset.id2), usage, daily)));
+    document.querySelectorAll('[data-ia]').forEach((b) => (b.onclick = () => adjDialog(by(b.dataset.ia), 'add')));
+    document.querySelectorAll('[data-iw]').forEach((b) => (b.onclick = () => adjDialog(by(b.dataset.iw), 'waste')));
+    document.querySelectorAll('#invRows tr[data-id]').forEach((r) => (r.ondblclick = () => stockDetail(by(r.dataset.id), usage, daily)));
+  };
+  const drawRows = () => {
+    const L = view();
+    $('invRows').innerHTML = L.map(rowHtml).join('') || EMPTY_ROW;
+    if ($('invCount')) $('invCount').textContent = `${L.length} من ${d.ingredients.length}`;
+    wire();
+  };
+  $('invBody').innerHTML = `<div class="kpis">
+    <div class="kpi"><small>المكوّنات المفعّلة</small><b>${act.length}</b></div>
+    <div class="kpi"><small>قيمة المخزون التقديرية</small><b>${money(tot)} <small>${CUR.symbol}</small></b></div>
+    <div class="kpi ${cnt.low ? 'warn' : ''}"><small>منخفضة (وصلت للحد)</small><b>${cnt.low}</b></div>
+    <div class="kpi ${cnt.out ? 'bad' : ''}"><small>نفدت</small><b>${cnt.out}</b></div></div>
+   <div class="stkbar"><input id="invQ" placeholder="بحث: الاسم، التصنيف، المورّد" value="${esc(INV.q)}">
+    <select id="invSort"><option value="need" ${INV.sort === 'need' ? 'selected' : ''}>الأحوج للطلب أولاً</option><option value="name" ${INV.sort === 'name' ? 'selected' : ''}>الاسم</option><option value="value" ${INV.sort === 'value' ? 'selected' : ''}>الأعلى قيمة</option></select>
+    <button id="invAdd">+ مكوّن</button>${cnt.out + cnt.low ? `<button id="invReorder" class="sec">🛒 طلب النواقص (${cnt.out + cnt.low})</button>` : ''}<button id="invCsv" class="sec">تصدير CSV</button></div>
+   <div class="tabs">${FL.map(([k, l, n]) => `<button data-ft="${k}" class="${INV.f === k ? 'on' : ''}">${l} (${n})</button>`).join('')}</div>
+   ${cats.length ? `<div class="tabs"><button data-ct="" class="${INV.cat ? '' : 'on'}">كل التصنيفات</button>${cats.map((c) => `<button data-ct="${esc(c)}" class="${INV.cat === c ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>` : ''}
+   <p class="muted">يُعرض <b id="invCount">${view().length} من ${d.ingredients.length}</b> — «يكفي لـ» تقدير من مبيعات آخر 14 يوماً. انقر «تفاصيل» لرؤية الأصناف المرتبطة وآخر الحركات.</p>
+   <table class="stk"><tr><th>المكوّن</th><th>الحالة</th><th>الكمية</th><th>الحد الأدنى</th><th>يكفي لـ</th><th>التكلفة</th><th>القيمة</th><th></th></tr><tbody id="invRows">${view().map(rowHtml).join('') || EMPTY_ROW}</tbody></table>
    ${d.ingredients.length ? '' : '<div class="card">لا توجد مكوّنات بعد. أضف المكوّنات (بن، حليب، أكواب…) ثم اربطها بالأصناف من تبويب «الوصفات» ليُخصم المخزون تلقائياً مع كل بيع.</div>'}`;
   $('invAdd').onclick = () => ingDialog(null);
-  document.querySelectorAll('[data-ct]').forEach((b) => (b.onclick = () => { INV.cat = b.dataset.ct; tabStock(d); }));
-  $('invQ').oninput = () => { const q = $('invQ').value.trim().toLowerCase(); document.querySelectorAll('#invRows tr').forEach((r) => (r.style.display = r.dataset.n.includes(q) ? '' : 'none')); };
-  const by = (id) => d.ingredients.find((x) => x.id === id);
-  document.querySelectorAll('[data-ie]').forEach((b) => (b.onclick = () => ingDialog(by(b.dataset.ie))));
-  document.querySelectorAll('[data-ia]').forEach((b) => (b.onclick = () => adjDialog(by(b.dataset.ia), 'add')));
-  document.querySelectorAll('[data-iw]').forEach((b) => (b.onclick = () => adjDialog(by(b.dataset.iw), 'waste')));
+  if ($('invReorder')) $('invReorder').onclick = () => reorderDialog(d);
+  $('invCsv').onclick = () => stockCsv(view());
+  $('invSort').onchange = () => { INV.sort = $('invSort').value; drawRows(); };
+  $('invQ').oninput = () => { INV.q = $('invQ').value; drawRows(); };
+  document.querySelectorAll('[data-ft]').forEach((b) => (b.onclick = () => { INV.f = b.dataset.ft; tabStock(d, m); }));
+  document.querySelectorAll('[data-ct]').forEach((b) => (b.onclick = () => { INV.cat = b.dataset.ct; tabStock(d, m); }));
+  wire();
+}
+
+// نافذة تفاصيل مكوّن واحد
+function stockDetail(i, usage = {}, daily = {}) {
+  if (!i) return;
+  const st = stkState(i), us = usage[i.id] || [];
+  const dlg = dlgOpen(`<h3>${esc(i.name)} ${stkBadge(st)}</h3>
+   <div class="lvl big"><i style="width:${stkPct(i)}%"></i></div>
+   <div class="dgrid">
+    <div><small>الكمية الحالية</small><b>${qtyFmt(i.qty, i.unit)}</b></div><div><small>الحد الأدنى للتنبيه</small><b>${i.minQty ? qtyFmt(i.minQty, i.unit) : 'بلا تنبيه'}</b></div>
+    <div><small>يكفي لـ (تقدير)</small><b>${stkCover(i, daily)}</b></div><div><small>القيمة</small><b>${money(i.valueCents)}</b></div>
+    <div><small>التكلفة</small><b>${costLabel(i)}</b></div><div><small>وحدة الشراء</small><b>${esc(i.packLabel || '—')}</b></div>
+    <div><small>التصنيف</small><b>${esc(i.category || '—')}</b></div><div><small>المورّد</small><b>${esc(i.supplier || '—')}</b></div></div>
+   <h4>يدخل في ${us.length} صنف</h4>
+   ${us.length ? `<table class="tt">${us.map((u) => `<tr><td>${esc(u.name)}</td><td>${qtyFmt(u.qty, i.unit)} للحبة</td></tr>`).join('')}</table>` : '<p class="muted">غير مربوط بأي وصفة (لا يُخصم تلقائياً).</p>'}
+   <h4>آخر الحركات</h4><div id="dtMv" class="muted">جارٍ التحميل…</div>
+   <div class="acts"><button id="dtAdd">+ إضافة</button><button class="sec" id="dtWaste">هدر</button><button class="sec" id="dtEdit">تعديل</button><button class="sec" id="dtNo">إغلاق</button></div>`);
+  const q = (s) => dlg.querySelector(s);
+  q('#dtNo').onclick = dlgClose;
+  q('#dtAdd').onclick = () => adjDialog(i, 'add');
+  q('#dtWaste').onclick = () => adjDialog(i, 'waste');
+  q('#dtEdit').onclick = () => ingDialog(i);
+  Promise.resolve(api.invMoves(i.id, 6)).then((rows) => {
+    q('#dtMv').innerHTML = rows.length ? `<table class="tt">${rows.map((r) => `<tr><td>${esc(fmtT(r.createdAt))}</td><td class="${r.delta < 0 ? 'err' : 'ok'}">${r.delta > 0 ? '+' : ''}${qtyFmt(r.delta, r.unit)}</td><td>${REASON_L[r.reason] || esc(r.reason)}</td></tr>`).join('')}</table>` : 'لا حركات.';
+  }).catch(() => { q('#dtMv').textContent = 'تعذّر تحميل الحركات'; });
+}
+
+// اقتراح أمر شراء للنواقص: يرفع كل مكوّن إلى ضعف حدّه الأدنى، ويُجمَّع حسب المورّد
+function reorderPlan(d) {
+  const groups = {};
+  d.ingredients.filter((i) => i.active && i.minQty > 0 && i.qty <= i.minQty).forEach((i) => {
+    const need = Math.ceil(i.minQty * 2 - i.qty); if (need <= 0) return;
+    (groups[i.supplier || ''] ||= []).push({ ing: i, qty: need, totalPrice: Math.round(need * i.unitCostCents) / 100 });
+  });
+  return groups;
+}
+function reorderDialog(d) {
+  const plan = reorderPlan(d), keys = Object.keys(plan);
+  if (!keys.length) return flash('لا نواقص حالياً');
+  const dlg = dlgOpen(`<h3>اقتراح أمر شراء للنواقص</h3><p class="muted">يُنشأ أمر مسودة لكل مورّد، ويمكنك تعديله من تبويب «المشتريات» قبل الإرسال. الكمية المقترحة ترفع الرصيد إلى ضعف الحد الأدنى.</p>
+   ${keys.map((k) => `<h4>${esc(k || 'بدون مورّد')}</h4><table class="tt">${plan[k].map((l) => `<tr><td>${esc(l.ing.name)}</td><td>${qtyFmt(l.ing.qty, l.ing.unit)} ← +${qtyFmt(l.qty, l.ing.unit)}</td><td>${money(Math.round(l.totalPrice * 100))}</td></tr>`).join('')}</table>`).join('')}
+   <div id="roErr" class="err"></div><div class="acts"><button id="roOk">إنشاء ${keys.length > 1 ? keys.length + ' أوامر' : 'أمر'} شراء</button><button class="sec" id="roNo">إلغاء</button></div>`);
+  dlg.querySelector('#roNo').onclick = dlgClose;
+  dlg.querySelector('#roOk').onclick = async () => {
+    try {
+      for (const k of keys) await api.poSave({ supplier: k, note: 'اقتراح تلقائي للنواقص', lines: plan[k].map((l) => ({ ingredientId: l.ing.id, qty: l.qty, totalPrice: l.totalPrice })) });
+      dlgClose(); flash('تم إنشاء مسودات أوامر الشراء'); INV.tab = 'po'; viewInventory();
+    } catch (e) { dlg.querySelector('#roErr').textContent = errMsg(e); }
+  };
+}
+
+function stockCsv(list) {
+  const c = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+  const head = ['المكوّن', 'التصنيف', 'المورّد', 'الحالة', 'الكمية', 'الوحدة', 'الحد الأدنى', 'القيمة'];
+  const rows = list.map((i) => [i.name, i.category, i.supplier, STK_L[stkState(i)], nz(i.qty), UNIT_L[i.unit], nz(i.minQty), (i.valueCents / 100).toFixed(2)]);
+  const csv = '\uFEFF' + [head, ...rows].map((r) => r.map(c).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `stock-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 function ingDialog(i) {
@@ -61,7 +203,7 @@ function ingDialog(i) {
    ${i ? '' : '<label>الكمية الحالية (بالوحدة الأساسية: جرام/مل/حبة)</label><input id="igQty" type="number" min="0" step="any" value="0">'}
    <label>الحد الأدنى للتنبيه (بالوحدة الأساسية، 0 = بلا تنبيه)</label><input id="igMin" type="number" min="0" step="any" value="${nz(i?.minQty || 0)}">
    <div class="drow"><label>سعر الشراء</label><input id="igPrice" type="number" min="0" step="any" value="${i ? nz((i.unitCostCents / 100) * pk) : ''}"><label>لكل</label><input id="igPack" type="number" min="0.001" step="any" value="${pk}"></div>
-   <small class="muted">مثال: 45 ريال لكل 1000 جرام. للحبة: السعر لكل 1.</small>
+   <small class="muted">مثال: 15000 دينار لكل 1000 جرام. للحبة: السعر لكل 1.</small>
    ${i ? `<label class="chk"><input type="checkbox" id="igAct" ${i.active ? 'checked' : ''}> مفعّل</label>` : ''}
    <div id="igErr" class="err"></div><div class="acts"><button id="igOk">حفظ</button>${i ? '<button id="igDel" class="danger">حذف</button>' : ''}<button class="sec" id="igNo">إلغاء</button></div>`);
   const q = (s) => dlg.querySelector(s);
@@ -191,7 +333,7 @@ function poDialog(po, d) {
   const draw = () => {
     const dlg = dlgOpen(`<h3>${po ? 'تعديل أمر شراء #' + po.number : 'أمر شراء جديد'}</h3><label>المورد</label><input id="poSup" value="${esc(po?.supplier || '')}" maxlength="80">
      ${rows.map((r, k) => `<div class="prow"><select data-pi="${k}" style="width:auto;flex:2">${ingOpts(d.ingredients, r.ingredientId)}</select><input data-pq="${k}" type="number" min="0" step="any" placeholder="الكمية" value="${esc(r.qty)}"><input data-pp="${k}" type="number" min="0" step="any" placeholder="إجمالي السعر" value="${esc(r.totalPrice)}"><button class="sm danger" data-px="${k}">✕</button></div>`).join('')}
-     <small class="muted">الكمية بالوحدة الأساسية (جرام/مل/حبة) وإجمالي سعر السطر بالريال.</small>
+     <small class="muted">الكمية بالوحدة الأساسية (جرام/مل/حبة) وإجمالي سعر السطر بالدينار.</small>
      <label>ملاحظة</label><input id="poNote" value="${esc(po?.note || '')}" maxlength="200">
      <div id="poErr" class="err"></div><div class="acts"><button class="sec" id="poRow">+ صنف</button><button id="poOk">حفظ كمسودة</button><button class="sec" id="poNo">إلغاء</button></div>`);
     const sync = () => { dlg.querySelectorAll('[data-pi]').forEach((s) => (rows[+s.dataset.pi].ingredientId = s.value)); dlg.querySelectorAll('[data-pq]').forEach((x) => (rows[+x.dataset.pq].qty = x.value)); dlg.querySelectorAll('[data-pp]').forEach((x) => (rows[+x.dataset.pp].totalPrice = x.value)); };
